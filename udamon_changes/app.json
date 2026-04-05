@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "우다몬",
+    "slug": "udamon",
+    "version": "1.0.0",
+    "scheme": "udamon",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "notification": {
+      "iosDisplayInForeground": true,
+      "color": "#1B2A4A"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.udamonfan.app",
+      "associatedDomains": [
+        "applinks:udamonfan.com"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.udamonfan.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "udamonfan.com",
+              "pathPrefix": "/post"
+            },
+            {
+              "scheme": "https",
+              "host": "udamonfan.com",
+              "pathPrefix": "/@"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-localization",
+      "expo-notifications",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bdc10dd6-5555-4594-a592-8c1e1ba17e8c"
+      }
+    },
+    "owner": "dohakimm"
+  }
+}
