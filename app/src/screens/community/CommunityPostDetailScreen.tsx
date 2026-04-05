@@ -1,0 +1,767 @@
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+
+import { useTranslation } from 'react-i18next';
+
+import { useCommunity } from '../../contexts/CommunityContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useLoginGate } from '../../hooks/useLoginGate';
+import { timeAgo } from '../../utils/time';
+import type { CommunityCommentWithAuthor } from '../../types/community';
+import type { RootStackParamList } from '../../types/navigation';
+import { isPollActive } from '../../types/poll';
+import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import { hapticMedium } from '../../utils/haptics';
+import { useToast } from '../../contexts/ToastContext';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Route = RouteProp<RootStackParamList, 'CommunityPostDetail'>;
+
+const COMMENT_MAX = 300;
+
+export default function CommunityPostDetailScreen() {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
+  const route = useRoute<Route>();
+  const { postId } = route.params;
+  const { user } = useAuth();
+  const currentUserId = user?.id ?? '';
+  const requireLogin = useLoginGate();
+  const { showToast } = useToast();
+
+  const {
+    getPost,
+    deletePost,
+    getComments,
+    createComment,
+    deleteComment,
+    toggleLike,
+    isLiked,
+    getPoll,
+    votePoll,
+    votedPolls,
+    reportTarget,
+    reportedIds,
+  } = useCommunity();
+
+  const post = getPost(postId);
+  const comments = getComments(postId);
+  const poll = post?.has_poll ? getPoll(postId) : undefined;
+
+  const [commentText, setCommentText] = useState('');
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  // Build comment tree: top-level + replies grouped
+  const commentTree = useMemo(() => {
+    const topLevel = comments.filter((c) => !c.parent_comment_id);
+    const grouped: { parent: CommunityCommentWithAuthor; replies: CommunityCommentWithAuthor[] }[] = [];
+    for (const parent of topLevel) {
+      const replies = comments.filter((c) => c.parent_comment_id === parent.id);
+      grouped.push({ parent, replies });
+    }
+    return grouped;
+  }, [comments]);
+
+  // ─── Handlers ─────────────────────────────────────────────
+
+  const handleBack = useCallback(() => navigation.goBack(), [navigation]);
+
+  const handleLikePost = useCallback(() => {
+    if (!requireLogin()) return;
+    if (!post) return;
+    hapticMedium();
+    toggleLike('post', post.id);
+  }, [post, toggleLike, requireLogin]);
+
+  const handleDeletePost = useCallback(() => {
+    Alert.alert(t('community_post_delete'), t('community_post_delete_confirm'), [
+      { text: t('btn_cancel'), style: 'cancel' },
+      {
+        text: t('btn_delete'),
+        style: 'destructive',
+        onPress: () => {
+          deletePost(postId);
+          navigation.goBack();
+        },
+      },
+    ]);
+  }, [postId, deletePost, navigation]);
+
+  const handleReportPost = useCallback(() => {
+    if (reportedIds.has(postId)) {
+      Alert.alert(t('community_already_reported'));
+      return;
+    }
+    Alert.alert(t('community_report_post'), t('community_report_post_confirm'), [
+      { text: t('btn_cancel'), style: 'cancel' },
+      {
+        text: t('btn_report'),
+        style: 'destructive',
+        onPress: () => {
+          const ok = reportTarget('post', postId, 'spam');
+          if (!ok) Alert.alert(t('community_report_failed'));
+        },
+      },
+    ]);
+  }, [postId, reportTarget, reportedIds]);
+
+  const handlePostAction = useCallback(() => {
+    if (!post) return;
+    const isOwner = post.user_id === currentUserId;
+    const buttons = isOwner
+      ? [
+          { text: t('btn_delete'), style: 'destructive' as const, onPress: handleDeletePost },
+          { text: t('btn_cancel'), style: 'cancel' as const },
+        ]
+      : [
+          { text: t('btn_report'), style: 'destructive' as const, onPress: handleReportPost },
+          { text: t('btn_cancel'), style: 'cancel' as const },
+        ];
+    Alert.alert('', '', buttons);
+  }, [post, handleDeletePost, handleReportPost]);
+
+  const handleSubmitComment = useCallback(() => {
+    if (!requireLogin()) return;
+    const text = commentText.trim();
+    if (!text) return;
+
+    createComment({
+      post_id: postId,
+      parent_comment_id: replyTo ?? undefined,
+      content: text,
+    });
+    setCommentText('');
+    setReplyTo(null);
+    showToast(t('toast_comment_sent'), 'success');
+  }, [commentText, postId, replyTo, createComment, showToast, t]);
+
+  const handleReply = useCallback((commentId: string) => {
+    setReplyTo(commentId);
+    inputRef.current?.focus();
+  }, []);
+
+  const handleDeleteComment = useCallback((commentId: string) => {
+    Alert.alert(t('community_comment_delete'), t('community_comment_delete_confirm'), [
+      { text: t('btn_cancel'), style: 'cancel' },
+      { text: t('btn_delete'), style: 'destructive', onPress: () => deleteComment(commentId) },
+    ]);
+  }, [deleteComment]);
+
+  const handleLikeComment = useCallback((commentId: string) => {
+    if (!requireLogin()) return;
+    hapticMedium();
+    toggleLike('comment', commentId);
+  }, [toggleLike, requireLogin]);
+
+  const handleVote = useCallback((optionId: string) => {
+    if (!poll) return;
+    votePoll(poll.id, optionId);
+  }, [poll, votePoll]);
+
+  // ─── Not found ─────────────────────────────────────────────
+  if (!post) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.notFound}>
+          <Text style={styles.notFoundText}>{t('community_post_not_found')}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const postLiked = isLiked(post.id);
+  const myVotes = poll ? (votedPolls[poll.id] ?? []) : [];
+  const hasVoted = myVotes.length > 0;
+  const pollActive = poll ? isPollActive(poll) : false;
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={styles.headerBtn} accessibilityLabel={t('a11y_back')}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handlePostAction} activeOpacity={0.7} style={styles.headerBtn} accessibilityLabel={t('a11y_more')}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Post Content */}
+          <View style={styles.postSection}>
+            {/* Author row */}
+            <View style={styles.authorRow}>
+              <View style={styles.avatar}>
+                <Ionicons name="person" size={18} color={colors.textTertiary} />
+              </View>
+              <View style={styles.authorInfo}>
+                <Text style={styles.authorName}>{post.user.nickname}</Text>
+                <View style={styles.metaRow}>
+                  {post.team && (
+                    <Text style={styles.teamBadge}>{post.team.name_ko}</Text>
+                  )}
+                  <Text style={styles.timeText}>{timeAgo(post.created_at)}</Text>
+                  {post.is_edited && <Text style={styles.editedText}>({t('community_comment_edited')})</Text>}
+                </View>
+              </View>
+            </View>
+
+            {/* Title & Content */}
+            <Text style={styles.postTitle}>{post.title}</Text>
+            <Text style={styles.postContent}>{post.content}</Text>
+
+            {/* Images */}
+            {post.images.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.imageScroll}
+                contentContainerStyle={styles.imageScrollContent}
+              >
+                {post.images.map((uri, i) => (
+                  <Image key={`img-${i}`} source={{ uri }} style={styles.postImage} />
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Poll */}
+            {poll && (
+              <View style={styles.pollContainer}>
+                <View style={styles.pollHeader}>
+                  <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+                  <Text style={styles.pollLabel}>
+                    {poll.allow_multiple ? t('community_poll_multiple') : t('community_poll_single')} · {t('community_poll_votes', { count: poll.total_votes })}
+                  </Text>
+                  {!pollActive && <Text style={styles.pollClosed}>{t('community_poll_closed')}</Text>}
+                </View>
+
+                {poll.options.map((opt) => {
+                  const pct = poll.total_votes > 0 ? Math.round((opt.vote_count / poll.total_votes) * 100) : 0;
+                  const voted = myVotes.includes(opt.id);
+                  const showResults = hasVoted || !pollActive;
+
+                  return (
+                    <TouchableOpacity
+                      key={opt.id}
+                      style={styles.pollOption}
+                      onPress={() => !showResults && pollActive && handleVote(opt.id)}
+                      activeOpacity={showResults ? 1 : 0.7}
+                      disabled={showResults || !pollActive}
+                    >
+                      {showResults && (
+                        <View style={[styles.pollBar, { width: `${pct}%` }]} />
+                      )}
+                      <Text style={[styles.pollOptionText, voted && styles.pollOptionVoted]}>
+                        {opt.text}
+                      </Text>
+                      {showResults && (
+                        <Text style={styles.pollPct}>{pct}%</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Like & stats row */}
+            <View style={styles.statsRow}>
+              <TouchableOpacity style={styles.likeBtn} onPress={handleLikePost} activeOpacity={0.7}>
+                <Ionicons
+                  name={postLiked ? 'heart' : 'heart-outline'}
+                  size={20}
+                  color={postLiked ? colors.error : colors.textTertiary}
+                />
+                <Text style={[styles.statText, postLiked && { color: colors.error }]}>
+                  {post.like_count}
+                </Text>
+              </TouchableOpacity>
+              <View style={styles.statItem}>
+                <Ionicons name="chatbubble-outline" size={18} color={colors.textTertiary} />
+                <Text style={styles.statText}>{post.comment_count}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Ionicons name="eye-outline" size={18} color={colors.textTertiary} />
+                <Text style={styles.statText}>{post.view_count}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Comments */}
+          <View style={styles.commentSection}>
+            <Text style={styles.commentSectionTitle}>
+              {t('post_comments')} {post.comment_count}
+            </Text>
+
+            {commentTree.length === 0 && (
+              <Text style={styles.noComments}>{t('community_no_comments')}</Text>
+            )}
+
+            {commentTree.map(({ parent, replies }) => (
+              <View key={parent.id}>
+                <CommentItem
+                  comment={parent}
+                  currentUserId={currentUserId}
+                  isLiked={isLiked(parent.id)}
+                  onLike={() => handleLikeComment(parent.id)}
+                  onReply={() => handleReply(parent.id)}
+                  onDelete={() => handleDeleteComment(parent.id)}
+                />
+                {replies.map((reply) => (
+                  <View key={reply.id} style={styles.replyIndent}>
+                    <CommentItem
+                      comment={reply}
+                      currentUserId={currentUserId}
+                      isLiked={isLiked(reply.id)}
+                      onLike={() => handleLikeComment(reply.id)}
+                      onReply={() => handleReply(parent.id)}
+                      onDelete={() => handleDeleteComment(reply.id)}
+                      isReply
+                    />
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Bottom Comment Input */}
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          {replyTo && (
+            <View style={styles.replyIndicator}>
+              <Text style={styles.replyIndicatorText}>{t('community_replying')}</Text>
+              <TouchableOpacity onPress={() => setReplyTo(null)}>
+                <Ionicons name="close" size={16} color={colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+          )}
+          <View style={styles.inputRow}>
+            <TextInput
+              ref={inputRef}
+              style={styles.commentInput}
+              placeholder={t('post_comment_placeholder')}
+              placeholderTextColor={colors.textTertiary}
+              value={commentText}
+              onChangeText={(text) => setCommentText(text.slice(0, COMMENT_MAX))}
+              maxLength={COMMENT_MAX}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={handleSubmitComment}
+              activeOpacity={0.7}
+              disabled={!commentText.trim()}
+            >
+              <Ionicons
+                name="send"
+                size={22}
+                color={commentText.trim() ? colors.primary : colors.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── Comment Item Component ───────────────────────────────────
+interface CommentItemProps {
+  comment: CommunityCommentWithAuthor;
+  currentUserId: string;
+  isLiked: boolean;
+  onLike: () => void;
+  onReply: () => void;
+  onDelete: () => void;
+  isReply?: boolean;
+}
+
+function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, onDelete, isReply }: CommentItemProps) {
+  const { t } = useTranslation();
+  const isOwner = comment.user_id === currentUserId;
+
+  if (comment.is_deleted) {
+    return (
+      <View style={styles.commentItem}>
+        <Text style={styles.deletedComment}>{t('community_comment_deleted')}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.commentItem}>
+      <View style={styles.commentHeader}>
+        <View style={styles.commentAvatar}>
+          <Ionicons name="person" size={14} color={colors.textTertiary} />
+        </View>
+        <Text style={styles.commentAuthor}>{comment.user.nickname}</Text>
+        <Text style={styles.commentTime}>{timeAgo(comment.created_at)}</Text>
+        {comment.is_edited && <Text style={styles.commentEdited}>({t('community_comment_edited')})</Text>}
+      </View>
+      <Text style={styles.commentText}>{comment.content}</Text>
+      <View style={styles.commentActions}>
+        <TouchableOpacity style={styles.commentAction} onPress={onLike} activeOpacity={0.7}>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={14}
+            color={liked ? colors.error : colors.textTertiary}
+          />
+          {comment.like_count > 0 && (
+            <Text style={[styles.commentActionText, liked && { color: colors.error }]}>
+              {comment.like_count}
+            </Text>
+          )}
+        </TouchableOpacity>
+        {!isReply && (
+          <TouchableOpacity style={styles.commentAction} onPress={onReply} activeOpacity={0.7}>
+            <Text style={styles.commentActionText}>{t('post_reply')}</Text>
+          </TouchableOpacity>
+        )}
+        {isOwner && (
+          <TouchableOpacity style={styles.commentAction} onPress={onDelete} activeOpacity={0.7}>
+            <Text style={[styles.commentActionText, { color: colors.error }]}>{t('btn_delete')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 20,
+  },
+
+  // Not found
+  notFound: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notFoundText: {
+    fontSize: fontSize.body,
+    color: colors.textTertiary,
+  },
+
+  // Post section
+  postSection: {
+    padding: 16,
+    borderBottomWidth: 8,
+    borderBottomColor: colors.surface,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.button,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authorInfo: {
+    marginLeft: 10,
+    flex: 1,
+  },
+  authorName: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.name,
+    color: colors.textPrimary,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  teamBadge: {
+    fontSize: fontSize.micro,
+    color: colors.primary,
+    fontWeight: fontWeight.body,
+  },
+  timeText: {
+    fontSize: fontSize.micro,
+    color: colors.textTertiary,
+  },
+  editedText: {
+    fontSize: fontSize.micro,
+    color: colors.textTertiary,
+  },
+  postTitle: {
+    fontSize: fontSize.price,
+    fontWeight: fontWeight.heading,
+    color: colors.textPrimary,
+    marginBottom: 10,
+  },
+  postContent: {
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+    lineHeight: 22,
+  },
+
+  // Images
+  imageScroll: {
+    marginTop: 14,
+  },
+  imageScrollContent: {
+    gap: 8,
+  },
+  postImage: {
+    width: 280,
+    height: 200,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+
+  // Poll
+  pollContainer: {
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+  },
+  pollHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  pollLabel: {
+    fontSize: fontSize.meta,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  pollClosed: {
+    fontSize: fontSize.micro,
+    color: colors.error,
+    fontWeight: fontWeight.body,
+  },
+  pollOption: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
+  },
+  pollBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: colors.primaryAlpha8,
+    borderRadius: radius.sm,
+  },
+  pollOptionText: {
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+    zIndex: 1,
+  },
+  pollOptionVoted: {
+    fontWeight: fontWeight.name,
+    color: colors.primary,
+  },
+  pollPct: {
+    fontSize: fontSize.meta,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.body,
+    zIndex: 1,
+  },
+
+  // Stats row
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  likeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: fontSize.meta,
+    color: colors.textTertiary,
+  },
+
+  // Comments section
+  commentSection: {
+    padding: 16,
+  },
+  commentSectionTitle: {
+    fontSize: fontSize.cardName,
+    fontWeight: fontWeight.name,
+    color: colors.textPrimary,
+    marginBottom: 16,
+  },
+  noComments: {
+    fontSize: fontSize.body,
+    color: colors.textTertiary,
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  replyIndent: {
+    paddingLeft: 36,
+  },
+  commentItem: {
+    marginBottom: 16,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  commentAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  commentAuthor: {
+    fontSize: fontSize.meta,
+    fontWeight: fontWeight.name,
+    color: colors.textPrimary,
+  },
+  commentTime: {
+    fontSize: fontSize.micro,
+    color: colors.textTertiary,
+  },
+  commentEdited: {
+    fontSize: fontSize.micro,
+    color: colors.textTertiary,
+  },
+  commentText: {
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+    lineHeight: 20,
+    marginLeft: 30,
+  },
+  deletedComment: {
+    fontSize: fontSize.body,
+    color: colors.textTertiary,
+    fontStyle: 'italic',
+    marginLeft: 30,
+  },
+  commentActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginLeft: 30,
+    marginTop: 6,
+  },
+  commentAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  commentActionText: {
+    fontSize: fontSize.micro,
+    color: colors.textTertiary,
+  },
+
+  // Bottom input bar
+  inputBar: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    backgroundColor: colors.background,
+  },
+  replyIndicator: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  replyIndicatorText: {
+    fontSize: fontSize.micro,
+    color: colors.primary,
+    fontWeight: fontWeight.body,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  commentInput: {
+    flex: 1,
+    maxHeight: 100,
+    fontSize: fontSize.body,
+    color: colors.textPrimary,
+    paddingVertical: 8,
+  },
+});
