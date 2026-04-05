@@ -250,7 +250,10 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_comments_count
   AFTER INSERT OR DELETE ON photo_comments FOR EACH ROW EXECUTE FUNCTION update_post_comment_count();
 
--- ─── Storage 버킷 ──────────────────────────────────────────
+-- ─── Storage 버킷 (DEPRECATED — Cloudflare R2로 전환됨) ──────
+-- 이미지/영상 업로드는 Cloudflare R2 버킷(udamon-media)으로 전환.
+-- 아래 코드는 기존 호환성을 위해 유지하나 실제로 사용되지 않음.
+-- 관련 RLS 정책은 010_deprecate_storage_policies.sql에서 제거됨.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES ('photo-posts', 'photo-posts', TRUE, 5242880, ARRAY['image/jpeg', 'image/png', 'image/webp'])
 ON CONFLICT (id) DO NOTHING;
