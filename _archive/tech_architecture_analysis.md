@@ -1,5 +1,9 @@
 # DUGOUT 기술 스택 · 아키텍처 · 인프라 심층 분석
 
+> **[NOTE - 2026-04-05]** 이미지/영상 스토리지가 Supabase Storage에서 Cloudflare R2로 전환됨.
+> 아래 문서 내 Supabase Storage 버킷, RLS 정책, 업로드 플로우 관련 내용은 더 이상 유효하지 않음.
+> 현행 구현: Edge Function(`get-upload-url`) → presigned URL → R2 직접 업로드.
+
 > 분석일: 2026-04-01
 
 ---

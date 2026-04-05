@@ -1,5 +1,9 @@
 # dugout 개발 스펙 (Claude Code 작업 지시서)
 
+> **[NOTE - 2026-04-05]** 이미지/영상 스토리지가 Supabase Storage에서 Cloudflare R2로 전환됨.
+> 아래 문서 내 Supabase Storage 버킷, RLS 정책, 업로드 플로우 관련 내용은 더 이상 유효하지 않음.
+> 현행 구현: Edge Function(`get-upload-url`) → presigned URL → R2 직접 업로드.
+
 > 이 문서는 dugout 서비스 프로토콜 v2 FINAL을 기반으로 한 기술 구현 명세입니다.
 > Claude Code에 작업 지시 시 이 문서 + 프로토콜을 함께 제공하세요.
 

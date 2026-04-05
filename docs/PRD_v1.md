@@ -98,7 +98,7 @@
 |------|------|
 | 이미지 리사이징 | Edge Function으로 리사이징/최적화 |
 | 썸네일 생성 | 피드 성능 개선 |
-| 영상 업로드 | Supabase Storage |
+| 영상 업로드 | Cloudflare R2 (presigned URL via Edge Function) |
 | 영상 재생 | 앱 내 네이티브 재생 |
 | 파일 크기 제한 | **TBD** — 클라이언트("도하님") 결정 대기 |
 
@@ -223,7 +223,7 @@
 | Supabase 플랜 | TBD (확인 필요) |
 | 기존 데이터 | 없음 (빈 상태) |
 | 마이그레이션 적용 여부 | 직접 확인 필요 |
-| Storage 버킷 | 확인 필요 |
+| 미디어 스토리지 | Cloudflare R2 (`udamon-media` 버킷) |
 | 환경변수 (.env) | 새로 생성 |
 
 ---
@@ -284,7 +284,7 @@
 5. 좋아요 연동
 6. 투표 연동
 7. 신고 연동 (관리자 수동 처리)
-8. 이미지 업로드 (community-posts Storage 버킷)
+8. 이미지 업로드 (R2 `community-posts` prefix)
 9. 검색 기능 (DB 기반 — 선수명, 게시글)
 10. 트렌딩 계산 (24시간 윈도우)
 11. Optimistic Update + 실패 핸들링
@@ -292,7 +292,7 @@
 ### Phase 3: 포토그래퍼 완성 + 미디어 처리 (~10시간)
 
 1. 포토그래퍼 연동 완성 (부분 → 완전)
-2. 영상 업로드 기능 (Supabase Storage)
+2. 영상 업로드 기능 (Cloudflare R2)
 3. 영상 재생 기능 (앱 내)
 4. 이미지 리사이징 Edge Function
 5. 썸네일 생성
