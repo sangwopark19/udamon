@@ -490,38 +490,8 @@ export async function removePostFromCollection(collectionId: string, postId: str
   }
 }
 
-// ─── Image Upload ─────────────────────────────────────────
-export async function uploadPostImages(userId: string, localUris: string[]): Promise<ApiResult<string[]>> {
-  try {
-    const publicUrls: string[] = [];
-    for (const uri of localUris) {
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).slice(2, 8);
-      const filePath = `${userId}/${timestamp}_${random}.jpg`;
-
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const { error: uploadError } = await supabase.storage
-        .from('photo-posts')
-        .upload(filePath, blob, {
-          contentType: 'image/jpeg',
-          upsert: false,
-        });
-
-      if (uploadError) return { data: null, error: uploadError.message };
-
-      const { data: urlData } = supabase.storage
-        .from('photo-posts')
-        .getPublicUrl(filePath);
-
-      publicUrls.push(urlData.publicUrl);
-    }
-    return { data: publicUrls, error: null };
-  } catch (e: any) {
-    return { data: null, error: e.message };
-  }
-}
+// ─── Image Upload (Cloudflare R2) ────────────────────────
+export { uploadPostImages } from './r2Upload';
 
 // ─── Photographer profile by user_id ──────────────────────
 export async function fetchPhotographerByUserId(userId: string): Promise<ApiResult<Photographer>> {

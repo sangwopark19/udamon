@@ -173,13 +173,13 @@ export default function UploadPostScreen() {
     const userId = user?.id ?? '';
     const pg = getPhotographer(userId);
 
-    // Upload images to Storage if remote
+    // Upload images to R2 if remote
     if (isRemote && userId && session) {
       setUploading(true);
       try {
         // Optimize images before upload
         const optimized = await Promise.all(images.map(optimizeImage));
-        const uploadResult = await photographerApi.uploadPostImages(userId, optimized);
+        const uploadResult = await photographerApi.uploadPostImages(userId, optimized, session.access_token);
         if (uploadResult.error || !uploadResult.data) {
           showToast(uploadResult.error ?? 'Upload failed');
           setUploading(false);
