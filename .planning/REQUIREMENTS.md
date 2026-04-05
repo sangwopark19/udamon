@@ -130,7 +130,7 @@
 |---------|--------|
 | 실시간 채팅 / 라이브 게임 채팅 | 6주 타임라인에 부적합, KakaoTalk 오픈채팅이 대안 |
 | DM 1:1 메시지 | 모더레이션 부담, 실시간 인프라 필요 |
-| 자동 블라인드 (5건 누적) | 제거 확정 → 관리자 수동 |
+| 자동 블라인드 (5건 누적) | 제거 확정 -> 관리자 수동 |
 | 금칙어/스팸 필터 | 초기 사용자 적음, 수동 관리 충분 |
 | NSFW 자동 필터 | 관리자 수동 대체 |
 | 티켓/결제/정산 | v1 비활성화 확정 |
@@ -142,20 +142,82 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 ~ DB-14 | Phase 1 | Pending |
-| AUTH-01 ~ AUTH-10 | Phase 1 | Pending |
-| SEC-01 ~ SEC-05 | Phase 1 | Pending |
-| COMM-01 ~ COMM-12 | Phase 2 | Pending |
-| PHOT-01 ~ PHOT-08 | Phase 3 | Pending |
-| ADM-01 ~ ADM-11 | Phase 4 | Pending |
-| NOTF-01 ~ NOTF-04 | Phase 5 | Pending |
-| MON-01 ~ MON-06 | Phase 5 | Pending |
+| DB-01 | Phase 1 | Pending |
+| DB-02 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Pending |
+| DB-04 | Phase 1 | Pending |
+| DB-05 | Phase 1 | Pending |
+| DB-06 | Phase 1 | Pending |
+| DB-07 | Phase 1 | Pending |
+| DB-08 | Phase 1 | Pending |
+| DB-09 | Phase 1 | Pending |
+| DB-10 | Phase 1 | Pending |
+| DB-11 | Phase 1 | Pending |
+| DB-12 | Phase 1 | Pending |
+| DB-13 | Phase 1 | Pending |
+| DB-14 | Phase 1 | Pending |
+| SEC-01 | Phase 1 | Pending |
+| SEC-02 | Phase 1 | Pending |
+| SEC-03 | Phase 1 | Pending |
+| SEC-04 | Phase 1 | Pending |
+| SEC-05 | Phase 1 | Pending |
+| AUTH-01 | Phase 2 | Pending |
+| AUTH-02 | Phase 2 | Pending |
+| AUTH-03 | Phase 2 | Pending |
+| AUTH-04 | Phase 2 | Pending |
+| AUTH-05 | Phase 2 | Pending |
+| AUTH-06 | Phase 2 | Pending |
+| AUTH-07 | Phase 2 | Pending |
+| AUTH-08 | Phase 2 | Pending |
+| AUTH-09 | Phase 2 | Pending |
+| AUTH-10 | Phase 2 | Pending |
+| COMM-01 | Phase 3 | Pending |
+| COMM-02 | Phase 3 | Pending |
+| COMM-03 | Phase 3 | Pending |
+| COMM-04 | Phase 3 | Pending |
+| COMM-05 | Phase 3 | Pending |
+| COMM-06 | Phase 3 | Pending |
+| COMM-07 | Phase 3 | Pending |
+| COMM-08 | Phase 3 | Pending |
+| COMM-09 | Phase 3 | Pending |
+| COMM-10 | Phase 3 | Pending |
+| COMM-11 | Phase 3 | Pending |
+| COMM-12 | Phase 3 | Pending |
+| PHOT-01 | Phase 4 | Pending |
+| PHOT-02 | Phase 4 | Pending |
+| PHOT-03 | Phase 4 | Pending |
+| PHOT-04 | Phase 4 | Pending |
+| PHOT-05 | Phase 4 | Pending |
+| PHOT-06 | Phase 4 | Pending |
+| PHOT-07 | Phase 4 | Pending |
+| PHOT-08 | Phase 4 | Pending |
+| ADM-01 | Phase 5 | Pending |
+| ADM-02 | Phase 5 | Pending |
+| ADM-03 | Phase 5 | Pending |
+| ADM-04 | Phase 5 | Pending |
+| ADM-05 | Phase 5 | Pending |
+| ADM-06 | Phase 5 | Pending |
+| ADM-07 | Phase 5 | Pending |
+| ADM-08 | Phase 5 | Pending |
+| ADM-09 | Phase 5 | Pending |
+| ADM-10 | Phase 5 | Pending |
+| ADM-11 | Phase 5 | Pending |
+| NOTF-01 | Phase 6 | Pending |
+| NOTF-02 | Phase 6 | Pending |
+| NOTF-03 | Phase 6 | Pending |
+| NOTF-04 | Phase 6 | Pending |
+| MON-01 | Phase 6 | Pending |
+| MON-02 | Phase 6 | Pending |
+| MON-03 | Phase 6 | Pending |
+| MON-04 | Phase 6 | Pending |
+| MON-05 | Phase 6 | Pending |
+| MON-06 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 65 total
-- Mapped to phases: 65
-- Unmapped: 0 ✓
+- v1 requirements: 70 total
+- Mapped to phases: 70
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation*
