@@ -31,12 +31,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. 비인증 사용자가 Supabase 클라이언트 SDK로 보호된 테이블 데이터를 조회하면 빈 결과가 반환된다 (RLS 동작 확인)
   4. 코드베이스에 하드코딩된 테스트 계정, 더미 키, console.log가 프로덕션 빌드에 포함되지 않는다
   5. 환경변수가 .env 파일로 관리되고, 앱이 .env 없이 실행하면 명확한 에러 메시지를 표시한다
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
-- [ ] 01-03: TBD
+- [ ] 01-01-PLAN.md -- public.users 테이블 + 7개 신규 테이블 생성 + photo_posts ALTER + cheerleaders 시드
+- [ ] 01-02-PLAN.md -- RLS 헬퍼 함수 + 전체 RLS 정책 적용 + spam_filter DROP + anon 정책 제거
+- [ ] 01-03-PLAN.md -- 보안 정리 (테스트 계정, console.log, 환경변수, 어드민 비밀번호, CORS)
 
 ### Phase 2: Authentication
 **Goal**: 사용자가 Google/Apple/Kakao/Naver 중 하나로 가입하고, 로그인 상태를 유지하며, 프로필을 관리할 수 있는 상태
@@ -134,7 +134,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Database Foundation & Security | 0/3 | Not started | - |
+| 1. Database Foundation & Security | 0/3 | Planned | - |
 | 2. Authentication | 0/3 | Not started | - |
 | 3. Community | 0/3 | Not started | - |
 | 4. Photographer | 0/3 | Not started | - |
