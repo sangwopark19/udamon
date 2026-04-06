@@ -1,10 +1,11 @@
 ---
 phase: 1
 slug: database-foundation-security
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-06
+updated: 2026-04-06
 ---
 
 # Phase 1 — Validation Strategy
@@ -19,9 +20,9 @@ created: 2026-04-06
 |----------|-------|
 | **Framework** | 없음 -- 프로젝트에 테스트 인프라 미구축 |
 | **Config file** | none |
-| **Quick run command** | `supabase db reset` |
-| **Full suite command** | `supabase db reset && grep -r "test@udamon\|DUMMY_URL\|console.log" app/src/` |
-| **Estimated runtime** | ~15 seconds |
+| **Quick run command** | `bash scripts/verify-phase-01.sh` |
+| **Full suite command** | `bash scripts/verify-phase-01.sh` |
+| **Estimated runtime** | ~5 seconds |
 
 ---
 
@@ -38,17 +39,17 @@ created: 2026-04-06
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-01-01 | 01 | 1 | DB-01 | — | users 테이블 존재 | SQL query | `supabase db reset` | N/A | ⬜ pending |
-| 01-01-02 | 01 | 1 | DB-02 | — | auth trigger 동작 | manual | Dashboard에서 사용자 생성 후 확인 | N/A | ⬜ pending |
-| 01-01-03 | 01 | 1 | DB-03~DB-09 | — | 테이블 존재 확인 | SQL query | `supabase db reset` | N/A | ⬜ pending |
-| 01-01-04 | 01 | 1 | DB-10~DB-11 | — | photo_posts 칼럼 추가 | SQL query | `\d photo_posts` | N/A | ⬜ pending |
-| 01-01-05 | 01 | 1 | DB-12 | — | 자동 블라인드 트리거 제거 | SQL query | `select * from pg_trigger` | N/A | ⬜ pending |
-| 01-02-01 | 02 | 1 | DB-13~DB-14 | T-1-06 | RLS 비인증 차단 | manual | anon key SELECT -> 빈 결과 | N/A | ⬜ pending |
-| 01-03-01 | 03 | 2 | SEC-01 | T-1-02 | 테스트 계정 제거 | grep | `grep -r "test@udamon" app/src/` | N/A | ⬜ pending |
-| 01-03-02 | 03 | 2 | SEC-02 | T-1-02 | 더미 키 제거 | grep | `grep -r "DUMMY_URL\|DUMMY_KEY" app/src/` | N/A | ⬜ pending |
-| 01-03-03 | 03 | 2 | SEC-03 | T-1-02 | 하드코딩 비밀번호 제거 | grep | `grep -r "admin1234" admin/src/` | N/A | ⬜ pending |
-| 01-03-04 | 03 | 2 | SEC-04 | T-1-03 | console.log 제거 | grep | `grep -r "console.log" app/src/` | N/A | ⬜ pending |
-| 01-03-05 | 03 | 2 | SEC-05 | T-1-04 | CORS origin 제한 | grep | `grep "Allow-Origin.*\*" supabase/functions/` | N/A | ⬜ pending |
+| 01-01-01 | 01 | 1 | DB-01 | — | users 테이블 존재 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-01-02 | 01 | 1 | DB-02 | — | auth trigger 동작 | manual | Dashboard에서 사용자 생성 후 확인 | N/A | ⬜ manual |
+| 01-01-03 | 01 | 1 | DB-03~DB-09 | — | 테이블 존재 확인 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-01-04 | 01 | 1 | DB-10~DB-11 | — | photo_posts 칼럼 추가 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-01-05 | 01 | 1 | DB-12 | — | 자동 블라인드 트리거 제거 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-02-01 | 02 | 1 | DB-13~DB-14 | T-1-06 | RLS 비인증 차단 | manual | anon key SELECT -> 빈 결과 | N/A | ⬜ manual |
+| 01-03-01 | 03 | 2 | SEC-01 | T-1-02 | 테스트 계정 제거 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-03-02 | 03 | 2 | SEC-02 | T-1-02 | 더미 키 제거 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-03-03 | 03 | 2 | SEC-03 | T-1-02 | 하드코딩 비밀번호 제거 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-03-04 | 03 | 2 | SEC-04 | T-1-03 | console.log 제거 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
+| 01-03-05 | 03 | 2 | SEC-05 | T-1-04 | CORS origin 제한 | smoke | `bash scripts/verify-phase-01.sh` | scripts/verify-phase-01.sh | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -75,11 +76,11 @@ created: 2026-04-06
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s (실측 ~5s)
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** 2026-04-06 — nyquist auditor — 49/49 assertions green (`bash scripts/verify-phase-01.sh`)
