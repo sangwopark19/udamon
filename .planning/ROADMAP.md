@@ -34,9 +34,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- public.users 테이블 + 7개 신규 테이블 생성 + photo_posts ALTER + cheerleaders 시드
-- [ ] 01-02-PLAN.md -- RLS 헬퍼 함수 + 전체 RLS 정책 적용 + spam_filter DROP + anon 정책 제거
-- [ ] 01-03-PLAN.md -- 보안 정리 (테스트 계정, console.log, 환경변수, 어드민 비밀번호, CORS)
+- [x] 01-01-PLAN.md -- public.users 테이블 + 7개 신규 테이블 생성 + photo_posts ALTER + cheerleaders 시드
+- [x] 01-02-PLAN.md -- RLS 헬퍼 함수 + 전체 RLS 정책 적용 + spam_filter DROP + anon 정책 제거
+- [x] 01-03-PLAN.md -- 보안 정리 (테스트 계정, console.log, 환경변수, 어드민 비밀번호, CORS)
 
 ### Phase 2: Authentication
 **Goal**: 사용자가 Google/Apple/Kakao/Naver 중 하나로 가입하고, 로그인 상태를 유지하며, 프로필을 관리할 수 있는 상태
