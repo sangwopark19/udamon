@@ -17,12 +17,21 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  console.error(
+    'Missing admin credentials. Set VITE_ADMIN_EMAIL and VITE_ADMIN_PASSWORD in admin/.env'
+  );
+}
+
 const ADMIN_ACCOUNTS: Record<string, { password: string; user: AdminUser }> = {
-  'admin@udamon.com': {
-    password: 'admin1234',
+  [ADMIN_EMAIL]: {
+    password: ADMIN_PASSWORD,
     user: {
       id: 'admin-001',
-      email: 'admin@udamon.com',
+      email: ADMIN_EMAIL,
       displayName: '관리자',
       role: 'super_admin',
     },
