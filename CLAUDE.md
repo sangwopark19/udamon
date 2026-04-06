@@ -265,9 +265,9 @@ KBO 팬과 팬 포토그래퍼를 위한 모바일 커뮤니티 앱. React Nativ
 - Admin web: 2 React Context providers (AuthContext, AdminContext); all data is mock
 - Persisted state: Auth session via `AsyncStorage` (mobile), `localStorage` (admin web)
 ## Key Abstractions
-- Purpose: Allows app to run on mock data when env vars are missing
+- Purpose: Fail-closed guard ensuring Supabase credentials are configured
 - Location: `app/src/services/supabase.ts`
-- Pattern: Boolean derived from presence of `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; used as branch condition in contexts
+- Pattern: Throws Error if either `EXPO_PUBLIC_SUPABASE_URL` or `EXPO_PUBLIC_SUPABASE_KEY` is missing; used as branch condition in contexts
 - Purpose: Uniform error-or-data return shape from service layer
 - Location: `app/src/services/photographerApi.ts`
 - Pattern: `{ data: T | null; error: string | null }`
