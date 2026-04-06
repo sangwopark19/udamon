@@ -17,12 +17,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
+
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error(
+    'Missing required environment variables: VITE_ADMIN_EMAIL and VITE_ADMIN_PASSWORD. ' +
+    'Copy admin/.env.example to admin/.env and set your admin credentials.'
+  );
+}
+
+// guard 이후이므로 non-empty string 보장
+const email: string = ADMIN_EMAIL;
+const password: string = ADMIN_PASSWORD;
+
 const ADMIN_ACCOUNTS: Record<string, { password: string; user: AdminUser }> = {
-  'admin@udamon.com': {
-    password: 'admin1234',
+  [email]: {
+    password,
     user: {
       id: 'admin-001',
-      email: 'admin@udamon.com',
+      email,
       displayName: '관리자',
       role: 'super_admin',
     },
@@ -50,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [admin]);
 
   const login = useCallback((email: string, password: string): boolean => {
+    if (!email || !password) return false;
     const account = ADMIN_ACCOUNTS[email];
     if (account && account.password === password) {
       setAdmin(account.user);

@@ -4,7 +4,6 @@ import type { Cheerleader } from '../types/cheerleader';
 import type { CommunityPostWithAuthor } from '../types/community';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTO_POSTS, MOCK_PLAYERS, MOCK_EVENTS } from '../data/mockPhotographers';
 import { MOCK_CHEERLEADERS } from '../data/mockCheerleaders';
-import { isSupabaseConfigured } from '../services/supabase';
 import * as photographerApi from '../services/photographerApi';
 
 function getISOWeek(date: Date): string {
@@ -158,10 +157,6 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
 
   // ─── Supabase data fetch ──────────────────────────────────
   const loadRemoteData = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setLoading(false);
-      return;
-    }
     try {
       const [pgResult, postsResult, playersResult, eventsResult, commentsResult, collectionsResult] = await Promise.all([
         photographerApi.fetchPhotographers(),

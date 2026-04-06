@@ -3,7 +3,6 @@ import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import type { AdminRole } from '../types/admin';
 
@@ -52,65 +51,6 @@ interface AuthContextValue extends AuthState {
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
-const TEST_ACCOUNT_KEY = 'udamon_test_account';
-
-const TEST_ACCOUNTS: Record<string, { password: string; profile: UserProfile; isPhotographer: boolean }> = {
-  'test@udamon.com': {
-    password: 'test1234',
-    profile: {
-      id: 'test-user-001',
-      email: 'test@udamon.com',
-      username: 'tester',
-      display_name: '테스트유저',
-      avatar_url: null,
-      bio: '우다몬 테스트 계정입니다.',
-      is_photographer: false,
-      is_admin: false,
-      admin_role: null,
-      ticket_balance: 100,
-      my_team_id: 'doosan',
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: false,
-  },
-  'test2@udamon.com': {
-    password: 'test1234',
-    profile: {
-      id: 'test-user-002',
-      email: 'test2@udamon.com',
-      username: 'photographer_tester',
-      display_name: '테스트포토그래퍼',
-      avatar_url: null,
-      bio: '포토그래퍼 테스트 계정입니다.',
-      is_photographer: true,
-      is_admin: false,
-      admin_role: null,
-      ticket_balance: 500,
-      my_team_id: 'lg',
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: true,
-  },
-  'admin@udamon.com': {
-    password: 'admin1234',
-    profile: {
-      id: 'admin-001',
-      email: 'admin@udamon.com',
-      username: 'admin',
-      display_name: '관리자',
-      avatar_url: null,
-      bio: '우다몬 관리자 계정입니다.',
-      is_photographer: false,
-      is_admin: true,
-      admin_role: 'super_admin',
-      ticket_balance: 0,
-      my_team_id: null,
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: false,
-  },
-};
-
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -138,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Extract code or tokens from an OAuth redirect URL and establish session */
   const extractAndSetSession = async (url: string) => {
-    console.log('[OAuth] extractAndSetSession URL:', url);
     const provider = pendingOAuthProvider.current;
 
     // Parse query params & hash fragment
@@ -150,7 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const code = qp.get('code') || hp.get('code');
     const accessToken = hp.get('access_token') || qp.get('access_token');
     const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
-    console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
 
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -172,22 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      // 1) Check for persisted test account first
-      try {
-        const savedEmail = await AsyncStorage.getItem(TEST_ACCOUNT_KEY);
-        if (savedEmail && TEST_ACCOUNTS[savedEmail]) {
-          const acct = TEST_ACCOUNTS[savedEmail];
-          setUser(acct.profile);
-          setLoginProvider('email');
-          setIsPhotographer(acct.isPhotographer);
-          setPhotographerId(acct.isPhotographer ? acct.profile.id : null);
-          setGuestMode(false);
-          setLoading(false);
-          return; // skip Supabase — test account restored
-        }
-      } catch { /* AsyncStorage not available, continue */ }
-
-      // 2) Normal Supabase session restore
+      // Supabase session restore
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
@@ -209,19 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(profile);
         if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
       } else {
-        // Don't wipe user if we're on a test account (no real session)
-        const savedEmail = await AsyncStorage.getItem(TEST_ACCOUNT_KEY).catch(() => null);
-        if (!savedEmail) {
-          setUser(null);
-          setIsPhotographer(false);
-          setPhotographerId(null);
-        }
+        setUser(null);
+        setIsPhotographer(false);
+        setPhotographerId(null);
       }
     });
 
-    // Deep link fallback — catches OAuth redirect when openAuthSessionAsync misses it
+    // Deep link fallback -- catches OAuth redirect when openAuthSessionAsync misses it
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('[Deep Link] URL received:', url, 'pendingOAuth:', pendingOAuthProvider.current);
       if (url.includes('auth/callback')) {
         extractAndSetSession(url);
         WebBrowser.dismissBrowser();
@@ -274,19 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithEmail = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    // Dev test accounts — bypass Supabase, persist to AsyncStorage
-    const testAcct = TEST_ACCOUNTS[email];
-    if (testAcct && password === testAcct.password) {
-      setUser(testAcct.profile);
-      setLoginProvider('email');
-      setIsPhotographer(testAcct.isPhotographer);
-      setPhotographerId(testAcct.isPhotographer ? testAcct.profile.id : null);
-      setGuestMode(false);
-      setLoading(false);
-      await AsyncStorage.setItem(TEST_ACCOUNT_KEY, email).catch(() => {});
-      return { success: true };
-    }
-
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error: error.message };
     setLoginProvider('email');
@@ -309,7 +214,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(TEST_ACCOUNT_KEY).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
     setUser(null); setSession(null); setLoginProvider(null);
     setIsPhotographer(false); setPhotographerId(null); setGuestMode(false);
@@ -317,12 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return;
-    // Test accounts — apply locally only
-    const isTestAccount = user.id.startsWith('test-user-');
-    if (!isTestAccount) {
-      const { error } = await supabase.from('users').update(updates).eq('id', user.id);
-      if (error) { console.error('updateUserProfile error:', error); return; }
-    }
+    const { error } = await supabase.from('users').update(updates).eq('id', user.id);
+    if (error) { console.error('updateUserProfile error:', error); return; }
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
   }, [user]);
 

@@ -29,21 +29,37 @@ const MAX_FILES: Record<string, number> = {
 
 const PRESIGNED_URL_EXPIRES_IN = 900; // 15 minutes
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type, apikey, x-client-info",
-};
+// TODO: 도메인 구매 후 실제 도메인으로 교체 (STATE.md blocker)
+const ALLOWED_ORIGINS = [
+  'https://udamonfan.com',
+  'https://www.udamonfan.com',
+  'https://admin.udamonfan.com',
+];
 
-function jsonResponse(body: unknown, status = 200): Response {
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') ?? '';
+  // 네이티브 앱은 origin 헤더가 없음 -- origin이 빈 문자열이면 허용
+  // 브라우저 요청은 origin이 있으므로 ALLOWED_ORIGINS와 대조
+  const isNativeApp = origin === '';
+  const isAllowedOrigin = ALLOWED_ORIGINS.includes(origin);
+  const allowedOrigin = isNativeApp ? '*' : (isAllowedOrigin ? origin : ALLOWED_ORIGINS[0]);
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, apikey, x-client-info',
+  };
+}
+
+function jsonResponse(body: unknown, status = 200, req: Request): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 }
 
-function errorResponse(message: string, status: number): Response {
-  return jsonResponse({ error: message }, status);
+function errorResponse(message: string, status: number, req: Request): Response {
+  return jsonResponse({ error: message }, status, req);
 }
 
 function getExtension(contentType: string): string {
@@ -60,17 +76,17 @@ function getExtension(contentType: string): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return new Response(null, { status: 204, headers: getCorsHeaders(req) });
   }
 
   if (req.method !== "POST") {
-    return errorResponse("Method not allowed", 405);
+    return errorResponse("Method not allowed", 405, req);
   }
 
   // --- Auth ---
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return errorResponse("Missing or invalid Authorization header", 401);
+    return errorResponse("Missing or invalid Authorization header", 401, req);
   }
 
   const token = authHeader.replace("Bearer ", "");
@@ -80,7 +96,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: userData, error: authError } = await supabase.auth.getUser(token);
   if (authError || !userData.user) {
-    return errorResponse("Unauthorized", 401);
+    return errorResponse("Unauthorized", 401, req);
   }
 
   const userId = userData.user.id;
@@ -90,27 +106,27 @@ Deno.serve(async (req: Request) => {
   try {
     body = await req.json();
   } catch {
-    return errorResponse("Invalid JSON body", 400);
+    return errorResponse("Invalid JSON body", 400, req);
   }
 
   const { prefix, contentType, count } = body;
 
   if (!prefix || !contentType || !count) {
-    return errorResponse("Missing required fields: prefix, contentType, count", 400);
+    return errorResponse("Missing required fields: prefix, contentType, count", 400, req);
   }
 
   const allowedTypes = ALLOWED_TYPES[prefix];
   if (!allowedTypes) {
-    return errorResponse(`Invalid prefix: ${prefix}`, 400);
+    return errorResponse(`Invalid prefix: ${prefix}`, 400, req);
   }
 
   if (!allowedTypes.includes(contentType)) {
-    return errorResponse(`Content type '${contentType}' not allowed for prefix '${prefix}'`, 400);
+    return errorResponse(`Content type '${contentType}' not allowed for prefix '${prefix}'`, 400, req);
   }
 
   const maxFiles = MAX_FILES[prefix];
   if (count < 1 || count > maxFiles) {
-    return errorResponse(`Count must be between 1 and ${maxFiles}`, 400);
+    return errorResponse(`Count must be between 1 and ${maxFiles}`, 400, req);
   }
 
   // --- R2 config ---
@@ -154,5 +170,5 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return jsonResponse({ uploads });
+  return jsonResponse({ uploads }, 200, req);
 });
