@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 2
 Plan: Not started
 Status: Executing Phase 01
-Last activity: 2026-04-06
+Last activity: 2026-04-06 - Completed quick task 260406-lrt: admin 빈 자격증명 취약점 수정 및 supabase 환경변수명 불일치 정리
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -78,6 +78,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260406-f50 | 페이즈1 테스트 환경 설정 및 테스트 가이드 작성 | 2026-04-06 | 36c533d | [260406-f50-1](./quick/260406-f50-1/) |
+| 260406-lrt | admin 빈 자격증명 취약점 수정 및 supabase 환경변수명 불일치 정리 | 2026-04-06 | 8696bbe | [260406-lrt-admin-supabase](./quick/260406-lrt-admin-supabase/) |
 
 ## Session Continuity
 
