@@ -75,7 +75,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          테스트: admin@udamon.com / admin1234
+          UDAMON Admin Panel
         </p>
       </div>
     </div>
