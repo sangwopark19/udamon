@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
-  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { supabase } from '../../services/supabase';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 
 export default function AccountManagementScreen() {
@@ -24,18 +25,42 @@ export default function AccountManagementScreen() {
   const { showToast } = useToast();
 
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const handleDeleteAccount = useCallback(() => {
-    setDeleteConfirmText('');
+    setDeleteStep(1);
     setShowDeleteAccount(true);
   }, []);
 
   const handleConfirmDelete = useCallback(async () => {
-    setShowDeleteAccount(false);
-    await logout();
-    showToast(t('account_delete_done'));
-  }, [logout, showToast]);
+    if (deleteStep === 1) {
+      setDeleteStep(2);
+      return;
+    }
+
+    // Step 2: 실제 탈퇴 처리
+    setDeleteLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('delete-account', {
+        method: 'POST',
+      });
+
+      if (error) {
+        showToast(t('account_delete_error'), 'error');
+        setDeleteLoading(false);
+        return;
+      }
+
+      setShowDeleteAccount(false);
+      await logout();
+      showToast(t('account_delete_done'));
+    } catch {
+      showToast(t('account_delete_error'), 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deleteStep, logout, showToast, t]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -60,7 +85,7 @@ export default function AccountManagementScreen() {
           </View>
         </View>
 
-        {/* Delete Account — small, non-prominent text link at the bottom */}
+        {/* Delete Account -- small, non-prominent text link at the bottom */}
         <TouchableOpacity
           style={styles.deleteLink}
           activeOpacity={0.7}
@@ -70,7 +95,7 @@ export default function AccountManagementScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Delete Account Modal */}
+      {/* Delete Account Modal -- 2단계 확인 */}
       <Modal visible={showDeleteAccount} transparent animationType="fade" onRequestClose={() => setShowDeleteAccount(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.deleteSheet}>
@@ -78,17 +103,21 @@ export default function AccountManagementScreen() {
               <Ionicons name="warning" size={32} color={colors.error} />
             </View>
             <Text style={styles.deleteTitle}>{t('account_delete_title')}</Text>
-            <Text style={styles.deleteWarning}>{t('account_delete_warning')}</Text>
 
-            <Text style={styles.deleteTypeLabel}>{t('account_delete_type_confirm')}</Text>
-            <TextInput
-              style={styles.deleteInput}
-              placeholder="DELETE"
-              placeholderTextColor={colors.textTertiary}
-              value={deleteConfirmText}
-              onChangeText={setDeleteConfirmText}
-              autoCapitalize="characters"
-            />
+            {deleteStep === 1 ? (
+              <>
+                <Text style={styles.deleteWarning}>
+                  {t('account_delete_warning_1')}
+                </Text>
+                <Text style={styles.deleteWarning}>
+                  {t('account_delete_warning_2')}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.deleteWarning}>
+                {t('account_delete_final')}
+              </Text>
+            )}
 
             <View style={styles.deleteActions}>
               <TouchableOpacity
@@ -99,12 +128,18 @@ export default function AccountManagementScreen() {
                 <Text style={styles.deleteCancelText}>{t('btn_cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.deleteConfirmBtn, deleteConfirmText !== 'DELETE' && { opacity: 0.4 }]}
+                style={styles.deleteConfirmBtn}
                 activeOpacity={0.7}
                 onPress={handleConfirmDelete}
-                disabled={deleteConfirmText !== 'DELETE'}
+                disabled={deleteLoading}
               >
-                <Text style={styles.deleteConfirmText}>{t('btn_delete')}</Text>
+                {deleteLoading ? (
+                  <ActivityIndicator size="small" color={colors.buttonPrimaryText} />
+                ) : (
+                  <Text style={styles.deleteConfirmText}>
+                    {deleteStep === 1 ? t('btn_next') : t('account_delete_confirm_btn')}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -171,7 +206,7 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
   },
 
-  // Delete link — small, unobtrusive
+  // Delete link -- small, unobtrusive
   deleteLink: {
     alignSelf: 'center',
     marginTop: 40,
@@ -217,29 +252,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 20,
-  },
-  deleteTypeLabel: {
-    fontSize: fontSize.meta,
-    fontWeight: fontWeight.name,
-    color: colors.textSecondary,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-  },
-  deleteInput: {
-    width: '100%', height: 48,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingHorizontal: 16,
-    fontSize: fontSize.body,
-    fontWeight: fontWeight.heading,
-    color: colors.error,
-    borderWidth: 1, borderColor: colors.border,
-    textAlign: 'center', letterSpacing: 2,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   deleteActions: {
-    flexDirection: 'row', gap: 12, width: '100%',
+    flexDirection: 'row', gap: 12, width: '100%', marginTop: 8,
   },
   deleteCancelBtn: {
     flex: 1, height: 48, borderRadius: radius.lg,

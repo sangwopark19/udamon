@@ -352,11 +352,13 @@ export default {
   permission_photo_library: '사진 라이브러리 접근 권한이 필요합니다.',
 
   // Account Delete
-  account_delete_title: '계정 삭제',
-  account_delete_warning: '계정을 삭제하면 30일 후 모든 데이터가 영구 삭제됩니다.',
-  account_delete_type_confirm: '삭제를 확인하려면 "DELETE"를 입력하세요',
-  account_delete_final: '정말 삭제하시겠습니까?',
-  account_delete_done: '계정 삭제가 요청되었습니다. 30일 이내 로그인하면 복구됩니다.',
+  account_delete_title: '회원 탈퇴',
+  account_delete_warning_1: '탈퇴 시 작성한 게시글과 댓글은 유지되며, \'탈퇴한 사용자\'로 표시됩니다.',
+  account_delete_warning_2: '탈퇴 후 동일 계정으로 재가입해도 이전 데이터를 복구할 수 없습니다.',
+  account_delete_final: '정말 탈퇴하시겠습니까?',
+  account_delete_confirm_btn: '탈퇴하기',
+  account_delete_error: '탈퇴 처리에 실패했습니다. 다시 시도해주세요.',
+  account_delete_done: '회원 탈퇴가 완료되었습니다.',
 
   // Ticket Shop
   shop_title: '티켓 충전',
