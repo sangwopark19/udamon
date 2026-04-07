@@ -48,15 +48,13 @@ Plans:
   3. 사용자가 로그아웃하면 로그인 화면으로 돌아가고, 회원 탈퇴하면 해당 사용자의 콘텐츠에 "탈퇴한 사용자"로 표시된다
   4. 사용자가 다른 사용자를 차단하면 차단한 사용자의 게시글이 피드에서 보이지 않는다
   5. Naver OAuth가 Edge Function 프록시를 통해 동작하고, Apple Sign In은 DUNS 완료 시 활성화된다
-**Plans**: 5 plans
+**Plans**: TBD
 **UI hint**: yes
 
 Plans:
-- [ ] 02-00-PLAN.md -- Wave 0 테스트 인프라 (Jest/jest-expo 설치, Supabase mock, auth 테스트 스캐폴드)
-- [ ] 02-01-PLAN.md -- Supabase Auth 핵심 전환 (클라이언트 업그레이드, OAuth 4종, 테스트 계정 제거)
-- [ ] 02-02-PLAN.md -- 프로필 온보딩 시스템 (ProfileSetupScreen, 닉네임 중복 체크, 구단 선택)
-- [ ] 02-03-PLAN.md -- 회원 탈퇴 + 사용자 차단 + 차단 UI 진입점 (Edge Function, BlockContext, ... 메뉴/프로필 차단)
-- [ ] 02-04-PLAN.md -- 통합 검증 (DB Push, Edge Function 배포, 타입 체크, 사용자 검증)
+- [ ] 02-01: TBD
+- [ ] 02-02: TBD
+- [ ] 02-03: TBD
 
 ### Phase 3: Community
 **Goal**: 사용자가 구단별 게시판에서 게시글 작성, 댓글, 좋아요, 투표, 검색을 실제 DB 데이터로 이용할 수 있는 상태
@@ -137,7 +135,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Database Foundation & Security | 0/3 | Not started | - |
-| 2. Authentication | 0/5 | Planned | - |
+| 2. Authentication | 0/3 | Not started | - |
 | 3. Community | 0/3 | Not started | - |
 | 4. Photographer | 0/3 | Not started | - |
 | 5. Admin | 0/3 | Not started | - |

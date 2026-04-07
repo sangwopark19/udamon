@@ -12,3 +12,6 @@ export const SUPPORT_FEATURE_ENABLED = false;
 
 /** Set to true to enable messaging/chat features */
 export const MESSAGE_FEATURE_ENABLED = false;
+
+/** Set to true when Apple Developer DUNS registration is complete (D-02) */
+export const APPLE_SIGNIN_ENABLED = false;

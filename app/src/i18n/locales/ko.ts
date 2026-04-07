@@ -540,6 +540,8 @@ export default {
   login_continue_google: 'Google로 계속하기',
   login_continue_apple: 'Apple로 계속하기',
   login_continue_kakao: '카카오로 계속하기',
+  login_continue_naver: '네이버로 계속하기',
+  login_preparing: '(준비 중)',
   login_error_invalid_email: '올바른 이메일을 입력하세요.',
   login_error_password_short: '비밀번호는 8자 이상이어야 합니다.',
   login_error_login_failed: '로그인에 실패했습니다.',
