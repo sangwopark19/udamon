@@ -270,12 +270,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ─── Profile Updates ───
+  const NICKNAME_CHANGE_LIMIT_DAYS = 30;
+
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return;
+
+    // 닉네임 변경 30일 제한 체크 (D-07)
+    if (updates.nickname && updates.nickname !== user.nickname) {
+      if (user.nickname_changed_at) {
+        const lastChanged = new Date(user.nickname_changed_at);
+        const daysSince = (Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince < NICKNAME_CHANGE_LIMIT_DAYS) {
+          showToast(t('nickname_change_limit', { days: Math.ceil(NICKNAME_CHANGE_LIMIT_DAYS - daysSince) }), 'error');
+          return;
+        }
+      }
+      updates.nickname_changed_at = new Date().toISOString();
+    }
+
     const { error } = await supabase.from('users').update(updates).eq('id', user.id);
-    if (error) { console.error('updateUserProfile error:', error); return; }
+    if (error) {
+      console.error('updateUserProfile error:', error);
+      showToast(t('profile_update_error'), 'error');
+      return;
+    }
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
-  }, [user]);
+  }, [user, showToast, t]);
 
   const refreshUser = useCallback(async () => {
     if (!session?.user) return;

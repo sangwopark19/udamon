@@ -765,4 +765,21 @@ export default {
   announcements_header: '공지사항',
   announcements_empty: '공지사항이 없습니다',
   announcements_load_more: '더보기',
+
+  // Profile Setup (Onboarding)
+  profile_setup_title: '프로필 설정',
+  profile_setup_nickname_label: '닉네임',
+  profile_setup_nickname_placeholder: '2~12자, 한글/영문/숫자',
+  profile_setup_nickname_checking: '확인 중...',
+  profile_setup_nickname_available: '사용 가능한 닉네임입니다',
+  profile_setup_nickname_taken: '이미 사용 중인 닉네임입니다',
+  profile_setup_nickname_invalid: '한글, 영문, 숫자만 사용 가능합니다 (2~12자)',
+  profile_setup_team_label: '응원 구단',
+  profile_setup_team_select: '응원하는 구단을 선택하세요',
+  profile_setup_avatar_later: '아바타는 나중에 설정할 수 있습니다',
+  profile_setup_start: '시작하기',
+
+  // Profile Update
+  nickname_change_limit: '닉네임은 {{days}}일 후에 변경할 수 있습니다',
+  profile_update_error: '프로필 업데이트에 실패했습니다',
 } as const;
