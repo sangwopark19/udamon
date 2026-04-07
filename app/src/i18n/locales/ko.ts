@@ -206,6 +206,17 @@ export default {
   block_empty_desc: '차단한 사용자의 콘텐츠는 표시되지 않으며,\n상대방은 회원님의 프로필을 볼 수 없습니다.',
   block_unblock_confirm: '이 사용자의 차단을 해제하시겠습니까?',
   block_info: '차단을 해제하면 상대방의 게시물과 댓글이 다시 표시됩니다. 상대방에게는 차단/해제 여부가 알려지지 않습니다.',
+  block_already: '이미 차단한 사용자입니다',
+  block_error: '차단에 실패했습니다',
+  block_success: '차단되었습니다',
+  unblock_error: '차단 해제에 실패했습니다',
+  unblock_success: '차단이 해제되었습니다',
+  block_user_btn: '이 사용자 차단',
+  block_confirm_title: '사용자 차단',
+  block_confirm_message: '이 사용자를 차단하시겠습니까? 차단한 사용자의 게시글과 댓글이 숨겨집니다.',
+  block_confirm_btn: '차단',
+  block_unknown_user: '알 수 없는 사용자',
+  unblock_btn: '차단 해제',
 
   // Report
   report_title: '신고하기',
@@ -352,11 +363,13 @@ export default {
   permission_photo_library: '사진 라이브러리 접근 권한이 필요합니다.',
 
   // Account Delete
-  account_delete_title: '계정 삭제',
-  account_delete_warning: '계정을 삭제하면 30일 후 모든 데이터가 영구 삭제됩니다.',
-  account_delete_type_confirm: '삭제를 확인하려면 "DELETE"를 입력하세요',
-  account_delete_final: '정말 삭제하시겠습니까?',
-  account_delete_done: '계정 삭제가 요청되었습니다. 30일 이내 로그인하면 복구됩니다.',
+  account_delete_title: '회원 탈퇴',
+  account_delete_warning_1: '탈퇴 시 작성한 게시글과 댓글은 유지되며, \'탈퇴한 사용자\'로 표시됩니다.',
+  account_delete_warning_2: '탈퇴 후 동일 계정으로 재가입해도 이전 데이터를 복구할 수 없습니다.',
+  account_delete_final: '정말 탈퇴하시겠습니까?',
+  account_delete_confirm_btn: '탈퇴하기',
+  account_delete_error: '탈퇴 처리에 실패했습니다. 다시 시도해주세요.',
+  account_delete_done: '회원 탈퇴가 완료되었습니다.',
 
   // Ticket Shop
   shop_title: '티켓 충전',

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useBlock } from '../../contexts/BlockContext';
+import { supabase } from '../../services/supabase';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+
+interface BlockedProfile {
+  id: string;
+  nickname: string | null;
+  avatar_url: string | null;
+}
 
 export default function BlockedUsersScreen() {
   const { t } = useTranslation();
@@ -22,13 +30,41 @@ export default function BlockedUsersScreen() {
   const { blockedUserIds, unblockUser } = useBlock();
 
   const blockedList = Array.from(blockedUserIds);
+  const [blockedProfiles, setBlockedProfiles] = useState<BlockedProfile[]>([]);
+
+  // 차단된 사용자 프로필 로드
+  useEffect(() => {
+    if (blockedList.length === 0) {
+      setBlockedProfiles([]);
+      return;
+    }
+
+    const loadProfiles = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('id, nickname, avatar_url')
+        .in('id', blockedList);
+
+      if (data) setBlockedProfiles(data as BlockedProfile[]);
+    };
+
+    loadProfiles();
+  }, [blockedUserIds]);
+
+  const getProfile = (userId: string): BlockedProfile | undefined => {
+    return blockedProfiles.find((p) => p.id === userId);
+  };
 
   const handleUnblock = (userId: string) => {
+    const profile = getProfile(userId);
+    const displayName = profile?.nickname ?? userId;
     Alert.alert(t('btn_unblock'), t('block_unblock_confirm'), [
       { text: t('btn_cancel'), style: 'cancel' },
       {
         text: t('btn_unblock'),
-        onPress: () => unblockUser(userId),
+        onPress: async () => {
+          await unblockUser(userId);
+        },
       },
     ]);
   };
@@ -60,27 +96,34 @@ export default function BlockedUsersScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {blockedList.map((userId, idx) => (
-              <View
-                key={userId}
-                style={[styles.userItem, idx === blockedList.length - 1 && { borderBottomWidth: 0 }]}
-              >
-                <View style={styles.userAvatar}>
-                  <Ionicons name="person" size={20} color={colors.textTertiary} />
-                </View>
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{userId}</Text>
-                  <Text style={styles.userSub}>{t('btn_block')}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.unblockBtn}
-                  onPress={() => handleUnblock(userId)}
-                  activeOpacity={0.7}
+            {blockedList.map((userId, idx) => {
+              const profile = getProfile(userId);
+              return (
+                <View
+                  key={userId}
+                  style={[styles.userItem, idx === blockedList.length - 1 && { borderBottomWidth: 0 }]}
                 >
-                  <Text style={styles.unblockBtnText}>{t('btn_unblock')}</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+                  <View style={styles.userAvatar}>
+                    {profile?.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+                    ) : (
+                      <Ionicons name="person" size={20} color={colors.textTertiary} />
+                    )}
+                  </View>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userName}>{profile?.nickname ?? t('block_unknown_user')}</Text>
+                    <Text style={styles.userSub}>{t('btn_block')}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.unblockBtn}
+                    onPress={() => handleUnblock(userId)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.unblockBtnText}>{t('btn_unblock')}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -185,6 +228,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   userInfo: {
     flex: 1,
