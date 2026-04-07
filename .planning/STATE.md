@@ -55,6 +55,12 @@ None yet.
 - Firebase 미설정 -- FCM 푸시 알림 블로커 (NOTF-03, NOTF-04 영향)
 - 도메인 (udamonfan.com) 미구매 -- OAuth 콜백 URL, 어드민 배포 URL, CORS 설정 블로커
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260407-jh5 | Supabase Auth OAuth 연동 조사 (Google/Kakao/Naver) | 2026-04-07 | pending | [260407-jh5-supabase-auth-google](./quick/260407-jh5-supabase-auth-google/) |
+
 ## Session Continuity
 
 Last session: 2026-04-05
