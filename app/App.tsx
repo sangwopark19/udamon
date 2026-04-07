@@ -83,6 +83,7 @@ import PopularPhotographersScreen from './src/screens/home/PopularPhotographersS
 import PhotographerTermsScreen from './src/screens/settings/PhotographerTermsScreen';
 import CopyrightPolicyScreen from './src/screens/settings/CopyrightPolicyScreen';
 import AnnouncementsScreen from './src/screens/settings/AnnouncementsScreen';
+import ProfileSetupScreen from './src/screens/onboarding/ProfileSetupScreen';
 
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminPostReviewScreen from './src/screens/admin/AdminPostReviewScreen';
@@ -161,7 +162,7 @@ function PushHandler() {
 }
 
 function AppNavigator() {
-  const { loading, isAuthenticated, guestMode } = useAuth();
+  const { loading, isAuthenticated, guestMode, user } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -171,6 +172,14 @@ function AppNavigator() {
   if (loading || onboardingDone === null) return <SplashScreen />;
 
   const canBrowse = isAuthenticated || guestMode;
+  const needsProfileSetup = isAuthenticated && user !== null && !user.nickname;
+
+  const getInitialRoute = (): keyof RootStackParamList => {
+    if (!canBrowse) return 'Login';
+    if (!onboardingDone) return 'Onboarding';
+    if (needsProfileSetup) return 'ProfileSetup';
+    return 'MainTabs';
+  };
 
   return (
     <NavigationContainer linking={linking}>
@@ -178,7 +187,7 @@ function AppNavigator() {
       <StatusBar style="dark" backgroundColor={colors.background} />
       <RootStack.Navigator
         key={canBrowse ? 'main' : 'auth'}
-        initialRouteName={canBrowse && !onboardingDone ? 'Onboarding' : canBrowse ? 'MainTabs' : 'Login'}
+        initialRouteName={getInitialRoute()}
         screenOptions={{ headerShown: false }}
       >
         {canBrowse ? (
@@ -207,6 +216,7 @@ function AppNavigator() {
             <RootStack.Screen name="Studio" component={StudioScreen} />
             <RootStack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
             <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
+            <RootStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
             <RootStack.Screen name="ContactSupport" component={ContactSupportScreen} />
             <RootStack.Screen name="InquiryList" component={InquiryListScreen} />
             <RootStack.Screen name="InquiryDetail" component={InquiryDetailScreen} />

@@ -31,6 +31,7 @@ export type RootStackParamList = {
   Search: undefined;
   PhotographerRegister: undefined;
   Onboarding: undefined;
+  ProfileSetup: undefined;
   Studio: { photographerId: string };
   CollectionDetail: { collectionId: string };
   ContactSupport: undefined;
