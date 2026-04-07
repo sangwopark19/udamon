@@ -56,7 +56,7 @@ export default function ProfileSetupScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(true);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ─── Load Teams ───
   useEffect(() => {

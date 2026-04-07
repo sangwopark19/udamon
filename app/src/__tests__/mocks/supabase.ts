@@ -36,7 +36,7 @@ const createMockQueryBuilder = () => {
   // Terminal methods
   builder.maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
   builder.single = jest.fn().mockResolvedValue({ data: null, error: null });
-  builder.then = undefined; // thenable 방지 -- await 시 terminal 메서드 사용 강제
+  builder.then = undefined as unknown as jest.Mock; // thenable 방지 -- await 시 terminal 메서드 사용 강제
 
   return builder;
 };
