@@ -423,20 +423,23 @@ const blockUser = useCallback(async (blockedId: string) => {
 
 ## Open Questions
 
-1. **Supabase 프로젝트 환경 설정 완료 여부**
+1. **Supabase 프로젝트 환경 설정 완료 여부** -- RESOLVED
    - What we know: `.env` 파일이 존재하지만 내용 미확인, `isSupabaseConfigured` 플래그로 분기 중
    - What's unclear: Google/Kakao/Naver API 키가 발급되었는지, Supabase Dashboard에서 provider가 활성화되었는지
    - Recommendation: 플래너가 "OAuth Provider 대시보드 설정" 태스크를 Wave 0으로 배치하여 선행 작업으로 처리
+   - Resolution: 02-04-PLAN.md의 user_setup 섹션에서 OAuth provider 대시보드 설정을 checkpoint로 처리. 실행 시 사용자가 직접 설정.
 
-2. **Naver Custom OAuth Provider의 userinfo 응답 매핑**
+2. **Naver Custom OAuth Provider의 userinfo 응답 매핑** -- RESOLVED
    - What we know: Naver userinfo 엔드포인트는 `https://openapi.naver.com/v1/nid/me`, Supabase Custom OAuth는 OAuth2 모드 지원
    - What's unclear: Naver의 userinfo JSON 응답 구조가 Supabase가 기대하는 형식과 맞는지 (email, name 등 필드 매핑)
    - Recommendation: Naver API 응답이 `{ response: { id, email, name, ... } }` 래핑 구조를 사용하므로 Custom Provider의 userinfo 파싱이 정상 동작하는지 실제 테스트 필요. 실패 시 Edge Function proxy로 응답 변환
+   - Resolution: 02-01-PLAN.md에서 custom:naver provider로 signInWithOAuth 구현. 04-PLAN.md human-verify에서 실제 Naver 로그인 테스트. 실패 시 Edge Function proxy로 전환 (Claude discretion).
 
-3. **Phase 1 완료 의존성**
+3. **Phase 1 완료 의존성** -- RESOLVED
    - What we know: Phase 2는 Phase 1 (DB Foundation)에 의존. public.users 테이블, RLS 정책 등이 전제 조건
    - What's unclear: Phase 1이 완료되었는지 (STATE.md에 "Phase 1 Ready to plan"으로 표시)
    - Recommendation: Phase 2 계획에 Phase 1 의존성을 명시적으로 기록. Wave 0에서 DB 스키마 존재 여부를 확인하는 검증 단계 포함
+   - Resolution: ROADMAP.md에 Phase 2 depends_on Phase 1 명시. 02-04-PLAN.md Task 1에서 supabase db push로 스키마 동기화 확인.
 
 ## Environment Availability
 
