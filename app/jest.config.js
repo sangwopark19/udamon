@@ -1,16 +1,14 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+const config = {
   preset: 'jest-expo',
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@supabase/.*|@react-native-async-storage/.*)',
   ],
-  setupFilesAfterSetup: [],
   moduleNameMapper: {
     '^../../services/supabase$': '<rootDir>/src/__tests__/mocks/supabase',
     '^../services/supabase$': '<rootDir>/src/__tests__/mocks/supabase',
   },
-  testPathDirs: ['<rootDir>/src/__tests__'],
+  testMatch: ['<rootDir>/src/__tests__/**/*.test.{ts,tsx}'],
   collectCoverageFrom: [
     'src/contexts/**/*.{ts,tsx}',
     'src/screens/auth/**/*.{ts,tsx}',
@@ -19,4 +17,4 @@ const config: Config = {
   ],
 };
 
-export default config;
+module.exports = config;
