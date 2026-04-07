@@ -24,6 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCommunity } from '../../contexts/CommunityContext';
 import { useArchive } from '../../contexts/ArchiveContext';
 import { usePhotographer } from '../../contexts/PhotographerContext';
+import { useBlock } from '../../contexts/BlockContext';
 import { useToast } from '../../contexts/ToastContext';
 import { KBO_TEAMS } from '../../constants/teams';
 import TeamSelectSheet from '../../components/common/TeamSelectSheet';
@@ -48,6 +49,7 @@ export default function MyPageScreen() {
   const { savedPostIds } = useArchive();
   const { followedPgIds } = usePhotographer();
   const { showToast } = useToast();
+  const { blockedUserIds, blockUser, isUserBlocked } = useBlock();
   const { showComingSoon } = useComingSoonModal();
 
   const [showTeamSheet, setShowTeamSheet] = useState(false);
@@ -328,6 +330,11 @@ export default function MyPageScreen() {
             <View style={styles.settingsLeft}>
               <Ionicons name="ban-outline" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsLabel}>{t('my_blocked_users')}</Text>
+              {blockedUserIds.size > 0 && (
+                <View style={styles.blockCountBadge}>
+                  <Text style={styles.blockCountText}>{blockedUserIds.size}</Text>
+                </View>
+              )}
             </View>
             <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
@@ -831,6 +838,20 @@ const styles = StyleSheet.create({
     fontSize: fontSize.body,
     fontWeight: fontWeight.name,
     color: colors.textPrimary,
+  },
+  blockCountBadge: {
+    backgroundColor: colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  blockCountText: {
+    fontSize: fontSize.micro,
+    fontWeight: fontWeight.heading,
+    color: colors.buttonPrimaryText,
   },
   settingsRight: {
     flexDirection: 'row',

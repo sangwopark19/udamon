@@ -206,6 +206,17 @@ export default {
   block_empty_desc: '차단한 사용자의 콘텐츠는 표시되지 않으며,\n상대방은 회원님의 프로필을 볼 수 없습니다.',
   block_unblock_confirm: '이 사용자의 차단을 해제하시겠습니까?',
   block_info: '차단을 해제하면 상대방의 게시물과 댓글이 다시 표시됩니다. 상대방에게는 차단/해제 여부가 알려지지 않습니다.',
+  block_already: '이미 차단한 사용자입니다',
+  block_error: '차단에 실패했습니다',
+  block_success: '차단되었습니다',
+  unblock_error: '차단 해제에 실패했습니다',
+  unblock_success: '차단이 해제되었습니다',
+  block_user_btn: '이 사용자 차단',
+  block_confirm_title: '사용자 차단',
+  block_confirm_message: '이 사용자를 차단하시겠습니까? 차단한 사용자의 게시글과 댓글이 숨겨집니다.',
+  block_confirm_btn: '차단',
+  block_unknown_user: '알 수 없는 사용자',
+  unblock_btn: '차단 해제',
 
   // Report
   report_title: '신고하기',
