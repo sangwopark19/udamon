@@ -235,9 +235,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ─── OAuth Login ───
-  // NOTE: iOS Simulator의 ASWebAuthenticationSession은 CJK 폰트 렌더링에
-  // 제한이 있어 Kakao 로그인 화면에서 한글이 "?" 박스로 표시될 수 있다.
-  // 이는 시뮬레이터 전용 이슈이며, 실제 기기에서는 정상 렌더링된다.
+  // NOTE: iOS에서는 openBrowserAsync(SFSafariViewController)를 사용하여
+  // CJK 폰트 렌더링 이슈를 해결한다. 콜백은 딥링크 리스너가 처리.
+  // Android에서는 openAuthSessionAsync(Chrome Custom Tabs) 유지.
   const login = async (provider: LoginProvider) => {
     if (provider === 'email') return;
 
@@ -316,18 +316,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      try {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-        console.log('[OAuth] WebBrowser result:', result.type);
-        if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
-          await extractAndSetSession(result.url);
-        } else if (result.type === 'cancel') {
+      if (Platform.OS === 'ios') {
+        // SFSafariViewController -- CJK 폰트 정상 렌더링
+        // 콜백은 Linking.addEventListener('url', ...) 딥링크 리스너가 처리
+        try {
+          console.log('[OAuth] iOS: opening SFSafariViewController');
+          await WebBrowser.openBrowserAsync(data.url, {
+            dismissButtonStyle: 'cancel',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+          });
+          // openBrowserAsync는 브라우저가 닫힐 때 resolve됨
+          // 사용자가 수동으로 닫은 경우 정리
+          if (pendingOAuthProvider.current) {
+            pendingOAuthProvider.current = null;
+          }
+        } catch (err: unknown) {
+          console.error('[OAuth] WebBrowser error:', err);
           pendingOAuthProvider.current = null;
+          showToast(t('oauth_error'), 'error');
         }
-      } catch (err: unknown) {
-        console.error('[OAuth] WebBrowser error:', err);
-        pendingOAuthProvider.current = null;
-        showToast(t('oauth_error'), 'error');
+      } else {
+        // Android: openAuthSessionAsync (Chrome Custom Tabs, CJK 정상 작동)
+        try {
+          console.log('[OAuth] Android: opening Chrome Custom Tab');
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+          console.log('[OAuth] WebBrowser result:', result.type);
+          if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
+            await extractAndSetSession(result.url);
+          } else if (result.type === 'cancel') {
+            pendingOAuthProvider.current = null;
+          }
+        } catch (err: unknown) {
+          console.error('[OAuth] WebBrowser error:', err);
+          pendingOAuthProvider.current = null;
+          showToast(t('oauth_error'), 'error');
+        }
       }
     } else {
       console.error('[OAuth] No auth URL returned from Supabase');
