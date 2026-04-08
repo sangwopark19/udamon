@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: Roadmap and state initialized
 last_updated: "2026-04-08T01:09:21.734Z"
-last_activity: 2026-04-08 -- Completed quick task 260408-jny
+last_activity: 2026-04-08 -- Completed quick task 260408-kcl
 progress:
   total_phases: 6
   completed_phases: 0
@@ -80,9 +80,10 @@ None yet.
 | 260407-jh5 | Supabase Auth OAuth 연동 조사 (Google/Kakao/Naver) | 2026-04-07 | 57ac6a6 | [260407-jh5-supabase-auth-google](./quick/260407-jh5-supabase-auth-google/) |
 | 260408-eai | 소셜 로그인 구글/카카오 OAuth 코드/설정 수정 | 2026-04-08 | 95b5ec3 | [260408-eai-oauth](./quick/260408-eai-oauth/) |
 | 260408-jny | 소셜 로그인 실패 알림 무한반복 버그 수정 | 2026-04-08 | 762988c | [260408-jny-social-login-alert-loop-fix](./quick/260408-jny-social-login-alert-loop-fix/) |
+| 260408-kcl | 소셜 로그인 OAuth 플로우 수정 (env 변수명 + 웹 콜백) | 2026-04-08 | d48a746 | [260408-kcl-oauth](./quick/260408-kcl-oauth/) |
 
 ## Session Continuity
 
 Last session: 2026-04-08
-Stopped at: Quick task 260408-eai OAuth fix completed
+Stopped at: Quick task 260408-kcl OAuth flow fix completed
 Resume file: None
