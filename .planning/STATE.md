@@ -82,6 +82,7 @@ None yet.
 | 260408-jny | 소셜 로그인 실패 알림 무한반복 버그 수정 | 2026-04-08 | 762988c | [260408-jny-social-login-alert-loop-fix](./quick/260408-jny-social-login-alert-loop-fix/) |
 | 260408-kcl | 소셜 로그인 OAuth 플로우 수정 (env 변수명 + 웹 콜백) | 2026-04-08 | d48a746 | [260408-kcl-oauth](./quick/260408-kcl-oauth/) |
 | 260408-kv5 | iOS 시뮬레이터 카카오 로그인 한글 깨짐 및 구글 로그인 URL 오류 수정 | 2026-04-08 | 6c02663 | [260408-kv5-ios-url](./quick/260408-kv5-ios-url/) |
+| 260408-m7c | iOS OAuth openBrowserAsync 전환 (ASWebAuthenticationSession 버그 우회) | 2026-04-08 | 8f6b32d | [260408-m7c-ios-oauth-openbrowserasync-aswebauthenti](./quick/260408-m7c-ios-oauth-openbrowserasync-aswebauthenti/) |
 
 ## Session Continuity
 
