@@ -317,23 +317,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        if (Platform.OS === 'ios') {
-          // iOS 26 beta: ASWebAuthenticationSession은 초기 URL을 열지 못하고,
-          // SFSafariViewController(openBrowserAsync)는 exp:// 커스텀 스킴 리디렉트를 처리 못한다.
-          // Safari 앱에서 직접 열면 exp:// 스킴을 인식해서 Expo Go로 돌아온다.
-          // OAuth 콜백은 deep link 리스너가 처리한다.
-          console.log('[OAuth] iOS: opening in Safari via Linking.openURL');
-          await Linking.openURL(data.url);
-        } else {
-          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-            preferEphemeralSession: false,
-          });
-          console.log('[OAuth] WebBrowser result:', result.type);
-          if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
-            await extractAndSetSession(result.url);
-          } else if (result.type === 'cancel') {
-            pendingOAuthProvider.current = null;
-          }
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('[OAuth] WebBrowser result:', result.type);
+        if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
+          await extractAndSetSession(result.url);
+        } else if (result.type === 'cancel') {
+          pendingOAuthProvider.current = null;
         }
       } catch (err: unknown) {
         console.error('[OAuth] WebBrowser error:', err);
