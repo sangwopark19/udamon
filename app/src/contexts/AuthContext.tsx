@@ -248,12 +248,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(buildProfileFromToken(authUser));
         setGuestMode(false);
         console.log('[OAuth] immediate user set:', authUser.id);
-        // 백그라운드에서 DB 프로필 로드
+        // 백그라운드에서 DB 프로필 로드 — JWT 데이터와 병합 (DB에 없는 필드 보존)
+        const tokenProfile = buildProfileFromToken(authUser);
         ensureUserProfile(authUser).then((dbProfile) => {
           if (dbProfile) {
-            console.log('[OAuth] DB profile loaded, updating user');
-            setUser(dbProfile);
-            if (dbProfile.is_photographer) { setIsPhotographer(true); setPhotographerId(dbProfile.id); }
+            // DB에 display_name/username 컬럼이 없을 수 있음 → JWT 값으로 fallback
+            const merged: UserProfile = {
+              ...tokenProfile,
+              ...dbProfile,
+              display_name: dbProfile.display_name ?? tokenProfile.display_name,
+              username: dbProfile.username ?? tokenProfile.username,
+              avatar_url: dbProfile.avatar_url ?? tokenProfile.avatar_url,
+            };
+            setUser(merged);
+            if (merged.is_photographer) { setIsPhotographer(true); setPhotographerId(merged.id); }
           }
         }).catch(() => {});
       }
