@@ -136,6 +136,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data as UserProfile;
   };
 
+  const ensureUserProfile = async (authUser: User): Promise<UserProfile | null> => {
+    // 1차 시도: 기존 프로필 조회
+    const existing = await fetchUserProfile(authUser);
+    if (existing) return existing;
+
+    console.log('[Auth] Profile not found, creating from user_metadata:', authUser.id);
+
+    // 2차: user_metadata에서 프로필 upsert
+    const meta = authUser.user_metadata ?? {};
+    const { error: upsertError } = await supabase
+      .from('users')
+      .upsert({
+        id: authUser.id,
+        email: authUser.email ?? null,
+        nickname: meta.preferred_username ?? meta.user_name ?? meta.name ?? (authUser.email ? authUser.email.split('@')[0] : 'user_' + authUser.id.replace(/-/g, '').slice(0, 8)),
+        username: meta.preferred_username ?? meta.user_name ?? (authUser.email ? authUser.email.split('@')[0] : null),
+        display_name: meta.full_name ?? meta.name ?? (authUser.email ? authUser.email.split('@')[0] : null),
+        avatar_url: meta.avatar_url ?? null,
+        role: 'user',
+      }, { onConflict: 'id' });
+
+    if (upsertError) {
+      console.error('[Auth] ensureUserProfile upsert error:', upsertError);
+      return null;
+    }
+
+    // 3차: upsert 성공 후 재조회 (DB default 값 포함된 완전한 행)
+    const profile = await fetchUserProfile(authUser);
+    if (!profile) {
+      console.error('[Auth] Profile still null after upsert for user:', authUser.id);
+    }
+    return profile;
+  };
+
   /** Extract code or tokens from an OAuth redirect URL and establish session */
   const extractAndSetSession = async (url: string) => {
     console.log('[OAuth] extractAndSetSession URL:', url);
@@ -155,14 +189,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) console.error('[OAuth] Code exchange error:', error);
-      else if (provider) setLoginProvider(provider);
+      else {
+        console.log('[OAuth] Code exchange success, waiting for onAuthStateChange');
+        if (provider) setLoginProvider(provider);
+      }
     } else if (accessToken && refreshToken) {
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
       if (error) console.error('[OAuth] Set session error:', error);
-      else if (provider) setLoginProvider(provider);
+      else {
+        console.log('[OAuth] setSession success, waiting for onAuthStateChange');
+        if (provider) setLoginProvider(provider);
+      }
     } else {
       console.warn('[OAuth] No code or tokens found in URL');
     }
@@ -192,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         if (session?.user) {
-          const profile = await fetchUserProfile(session.user);
+          const profile = await ensureUserProfile(session.user);
           setUser(profile);
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
         }
@@ -205,7 +245,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
       if (session?.user) {
-        const profile = await fetchUserProfile(session.user);
+        console.log('[Auth] onAuthStateChange event:', _event, 'user:', session.user.id);
+        const profile = await ensureUserProfile(session.user);
         setUser(profile);
         if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
       } else {
@@ -221,10 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Deep link fallback — catches OAuth redirect when openAuthSessionAsync misses it
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('[Deep Link] URL received:', url);
-      console.log('[Deep Link] Pending OAuth provider:', pendingOAuthProvider.current);
-      console.log('[Deep Link] Query params:', url.split('?')[1]?.split('#')[0] || 'none');
-      console.log('[Deep Link] Hash fragment:', url.split('#')[1] || 'none');
+      console.log('[Deep Link] URL received:', url, 'pendingOAuth:', pendingOAuthProvider.current);
       if (url.includes('auth/callback')) {
         extractAndSetSession(url);
         WebBrowser.dismissBrowser();
@@ -246,10 +284,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const redirectUrl = Linking.createURL('auth/callback');
     pendingOAuthProvider.current = provider;
 
-    // Dev/Production 스킴 차이 진단 로그
-    console.log('[OAuth] redirectUrl:', redirectUrl);
-    console.log('[OAuth] Expected scheme: udamon://, got:', redirectUrl.split('://')[0] + '://');
-
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: providerMap[provider],
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
@@ -262,19 +296,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (data?.url) {
-      console.log('[OAuth] Auth URL:', data.url);
-      // 카카오 OAuth 도메인 검증
-      if (provider === 'kakao') {
-        try {
-          const authHost = new URL(data.url).hostname;
-          console.log('[OAuth] Kakao auth URL domain:', authHost);
-          if (!authHost.includes('kakao')) {
-            console.warn('[OAuth] Unexpected Kakao auth domain:', authHost);
-          }
-        } catch (e: unknown) {
-          console.error('[OAuth] Failed to parse auth URL:', e instanceof Error ? e.message : 'unknown');
-        }
-      }
       if (Platform.OS === 'android') {
         // Android Custom Tabs can't reliably detect scheme redirects in Expo Go.
         // Open in system browser and let deep link listener handle the callback.
@@ -348,7 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = useCallback(async () => {
     if (!session?.user) return;
-    const profile = await fetchUserProfile(session.user);
+    const profile = await ensureUserProfile(session.user);
     if (profile) setUser(profile);
   }, [session]);
 
