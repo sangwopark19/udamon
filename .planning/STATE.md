@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: Roadmap and state initialized
 last_updated: "2026-04-08T01:09:21.734Z"
-last_activity: 2026-04-08 -- Phase 02 execution started
+last_activity: 2026-04-08 -- Completed quick task 260408-jny
 progress:
   total_phases: 6
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 02 (authentication) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 02
-Last activity: 2026-04-08 -- Phase 02 execution started
+Last activity: 2026-04-08 -- Completed quick task 260408-jny: 소셜 로그인 실패 알림 무한반복 버그 수정
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -79,6 +79,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260407-jh5 | Supabase Auth OAuth 연동 조사 (Google/Kakao/Naver) | 2026-04-07 | 57ac6a6 | [260407-jh5-supabase-auth-google](./quick/260407-jh5-supabase-auth-google/) |
 | 260408-eai | 소셜 로그인 구글/카카오 OAuth 코드/설정 수정 | 2026-04-08 | 95b5ec3 | [260408-eai-oauth](./quick/260408-eai-oauth/) |
+| 260408-jny | 소셜 로그인 실패 알림 무한반복 버그 수정 | 2026-04-08 | 762988c | [260408-jny-social-login-alert-loop-fix](./quick/260408-jny-social-login-alert-loop-fix/) |
 
 ## Session Continuity
 
