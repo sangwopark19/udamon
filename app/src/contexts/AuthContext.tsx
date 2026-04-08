@@ -318,16 +318,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         if (Platform.OS === 'ios') {
-          // iOS: ASWebAuthenticationSession이 iOS 26 beta에서 URL을 열지 못하는 이슈가 있어
-          // SFSafariViewController(openBrowserAsync)를 사용한다.
+          // iOS 26 beta: ASWebAuthenticationSession은 초기 URL을 열지 못하고,
+          // SFSafariViewController(openBrowserAsync)는 exp:// 커스텀 스킴 리디렉트를 처리 못한다.
+          // Safari 앱에서 직접 열면 exp:// 스킴을 인식해서 Expo Go로 돌아온다.
           // OAuth 콜백은 deep link 리스너가 처리한다.
-          console.log('[OAuth] iOS: opening with SFSafariViewController');
-          await WebBrowser.openBrowserAsync(data.url);
-          // openBrowserAsync는 브라우저 닫힘 시 resolve됨
-          // 콜백 미수신 시 pendingOAuthProvider 정리
-          if (pendingOAuthProvider.current) {
-            pendingOAuthProvider.current = null;
-          }
+          console.log('[OAuth] iOS: opening in Safari via Linking.openURL');
+          await Linking.openURL(data.url);
         } else {
           const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
             preferEphemeralSession: false,
