@@ -1,13 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
-import type { Provider } from '@supabase/auth-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
-import { useToast } from './ToastContext';
-import { APPLE_SIGNIN_ENABLED } from '../constants/config';
 import type { AdminRole } from '../types/admin';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -21,8 +18,6 @@ export interface UserProfile {
   display_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  nickname: string | null;
-  nickname_changed_at: string | null;
   is_photographer: boolean;
   is_admin: boolean;
   admin_role: AdminRole | null;
@@ -57,12 +52,68 @@ interface AuthContextValue extends AuthState {
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
+const TEST_ACCOUNT_KEY = 'udamon_test_account';
+
+const TEST_ACCOUNTS: Record<string, { password: string; profile: UserProfile; isPhotographer: boolean }> = {
+  'test@udamon.com': {
+    password: 'test1234',
+    profile: {
+      id: 'test-user-001',
+      email: 'test@udamon.com',
+      username: 'tester',
+      display_name: '테스트유저',
+      avatar_url: null,
+      bio: '우다몬 테스트 계정입니다.',
+      is_photographer: false,
+      is_admin: false,
+      admin_role: null,
+      ticket_balance: 100,
+      my_team_id: 'doosan',
+      created_at: new Date().toISOString(),
+    },
+    isPhotographer: false,
+  },
+  'test2@udamon.com': {
+    password: 'test1234',
+    profile: {
+      id: 'test-user-002',
+      email: 'test2@udamon.com',
+      username: 'photographer_tester',
+      display_name: '테스트포토그래퍼',
+      avatar_url: null,
+      bio: '포토그래퍼 테스트 계정입니다.',
+      is_photographer: true,
+      is_admin: false,
+      admin_role: null,
+      ticket_balance: 500,
+      my_team_id: 'lg',
+      created_at: new Date().toISOString(),
+    },
+    isPhotographer: true,
+  },
+  'admin@udamon.com': {
+    password: 'admin1234',
+    profile: {
+      id: 'admin-001',
+      email: 'admin@udamon.com',
+      username: 'admin',
+      display_name: '관리자',
+      avatar_url: null,
+      bio: '우다몬 관리자 계정입니다.',
+      is_photographer: false,
+      is_admin: true,
+      admin_role: 'super_admin',
+      ticket_balance: 0,
+      my_team_id: null,
+      created_at: new Date().toISOString(),
+    },
+    isPhotographer: false,
+  },
+};
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslation();
-  const { showToast } = useToast();
-
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loginProvider, setLoginProvider] = useState<LoginProvider | null>(null);
@@ -74,9 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = user !== null;
   const isGuest = !isAuthenticated;
   const pendingOAuthProvider = useRef<LoginProvider | null>(null);
-  const isProcessingCallback = useRef(false);
 
-  // ─── User Profile Fetch ───
   const fetchUserProfile = async (authUser: User): Promise<UserProfile | null> => {
     const { data, error } = await supabase
       .from('users')
@@ -87,86 +136,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data as UserProfile;
   };
 
-  // ─── OAuth Session Extraction ───
   /** Extract code or tokens from an OAuth redirect URL and establish session */
   const extractAndSetSession = async (url: string) => {
-    // 중복 콜백 방지 — WebBrowser 콜백과 Deep Link 리스너가 동시에 호출될 수 있다
-    if (isProcessingCallback.current) {
-      console.log('[OAuth] Skipping duplicate callback');
-      return;
+    console.log('[OAuth] extractAndSetSession URL:', url);
+    const provider = pendingOAuthProvider.current;
+
+    // Parse query params & hash fragment
+    const qs = url.split('?')[1]?.split('#')[0] ?? '';
+    const hash = url.split('#')[1] ?? '';
+    const qp = new URLSearchParams(qs);
+    const hp = new URLSearchParams(hash);
+
+    const code = qp.get('code') || hp.get('code');
+    const accessToken = hp.get('access_token') || qp.get('access_token');
+    const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
+    console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
+
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) console.error('[OAuth] Code exchange error:', error);
+      else if (provider) setLoginProvider(provider);
+    } else if (accessToken && refreshToken) {
+      const { error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) console.error('[OAuth] Set session error:', error);
+      else if (provider) setLoginProvider(provider);
+    } else {
+      console.warn('[OAuth] No code or tokens found in URL');
     }
 
-    // URL 유효성 검증 — auth/callback 경로가 아니면 무시
-    if (!url || !url.includes('auth/callback')) {
-      console.warn('[OAuth] Unexpected callback URL format:', url);
-      pendingOAuthProvider.current = null;
-      return;
-    }
-
-    isProcessingCallback.current = true;
-    try {
-      console.log('[OAuth] extractAndSetSession URL:', url);
-      const provider = pendingOAuthProvider.current;
-
-      // Parse query params & hash fragment
-      const qs = url.split('?')[1]?.split('#')[0] ?? '';
-      const hash = url.split('#')[1] ?? '';
-      const qp = new URLSearchParams(qs);
-      const hp = new URLSearchParams(hash);
-
-      const code = qp.get('code') || hp.get('code');
-      const accessToken = hp.get('access_token') || qp.get('access_token');
-      const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
-      console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
-
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          console.error('[OAuth] Code exchange error:', error);
-          showToast(t('oauth_error'), 'error');
-        } else {
-          if (provider) setLoginProvider(provider);
-          // 웹: 콜백 URL 정리 — /auth/callback 에 머물면 재파싱 가능
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.history.replaceState({}, '', '/');
-          }
-        }
-      } else if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-        if (error) {
-          console.error('[OAuth] Set session error:', error);
-          showToast(t('oauth_error'), 'error');
-        } else {
-          if (provider) setLoginProvider(provider);
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.history.replaceState({}, '', '/');
-          }
-        }
-      } else {
-        console.warn('[OAuth] No code or tokens found in URL');
-      }
-
-      pendingOAuthProvider.current = null;
-    } finally {
-      isProcessingCallback.current = false;
-    }
+    pendingOAuthProvider.current = null;
   };
 
-  // ─── Initialization & Auth State Listener ───
   useEffect(() => {
     const init = async () => {
+      // 1) Check for persisted test account first
       try {
-        // 웹: /auth/callback에 토큰이 있으면 수동으로 세션 설정
-        // detectSessionInUrl 대신 setSession()으로 직접 처리 (getUser() 401 회피)
-        if (Platform.OS === 'web' && typeof window !== 'undefined' &&
-            window.location.href.includes('auth/callback') &&
-            (window.location.hash.includes('access_token') || window.location.hash.includes('code'))) {
-          await extractAndSetSession(window.location.href);
+        const savedEmail = await AsyncStorage.getItem(TEST_ACCOUNT_KEY);
+        if (savedEmail && TEST_ACCOUNTS[savedEmail]) {
+          const acct = TEST_ACCOUNTS[savedEmail];
+          setUser(acct.profile);
+          setLoginProvider('email');
+          setIsPhotographer(acct.isPhotographer);
+          setPhotographerId(acct.isPhotographer ? acct.profile.id : null);
+          setGuestMode(false);
+          setLoading(false);
+          return; // skip Supabase — test account restored
         }
+      } catch { /* AsyncStorage not available, continue */ }
 
+      // 2) Normal Supabase session restore
+      try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         if (session?.user) {
@@ -175,54 +197,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
         }
       } catch { /* Supabase unreachable */ }
-
-      // 웹: OAuth 콜백 URL 정리
-      if (Platform.OS === 'web' && typeof window !== 'undefined' &&
-          window.location.pathname.includes('/auth/callback')) {
-        window.history.replaceState({}, '', '/');
-      }
-
       setLoading(false);
     };
 
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
-
-      if (event === 'SIGNED_IN') {
-        // 로그인 시에만 프로필 조회
-        if (session?.user) {
-          const profile = await fetchUserProfile(session.user);
-          setUser(profile);
-          if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
-        }
-        // 웹: OAuth 콜백 URL 정리 (init보다 onAuthStateChange가 늦게 올 수 있다)
-        if (Platform.OS === 'web' && typeof window !== 'undefined' &&
-            window.location.pathname.includes('/auth/callback')) {
-          window.history.replaceState({}, '', '/');
-        }
-      } else if (event === 'TOKEN_REFRESHED') {
-        // 토큰 갱신 시 세션만 업데이트 (프로필 재조회 안 함)
-        if (!session) {
-          // 세션 갱신 실패 — 로그인 화면으로 이동
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user);
+        setUser(profile);
+        if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
+      } else {
+        // Don't wipe user if we're on a test account (no real session)
+        const savedEmail = await AsyncStorage.getItem(TEST_ACCOUNT_KEY).catch(() => null);
+        if (!savedEmail) {
           setUser(null);
           setIsPhotographer(false);
           setPhotographerId(null);
-          showToast(t('session_expired'), 'error');
         }
-      } else if (event === 'SIGNED_OUT') {
-        // 로그아웃 시 상태 초기화
-        setUser(null);
-        setIsPhotographer(false);
-        setPhotographerId(null);
       }
     });
 
     // Deep link fallback — catches OAuth redirect when openAuthSessionAsync misses it
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
-      console.log('[Deep Link] URL received:', url, 'pendingOAuth:', pendingOAuthProvider.current);
-      if (url.includes('auth/callback') && pendingOAuthProvider.current) {
+      console.log('[Deep Link] URL received:', url);
+      console.log('[Deep Link] Pending OAuth provider:', pendingOAuthProvider.current);
+      console.log('[Deep Link] Query params:', url.split('?')[1]?.split('#')[0] || 'none');
+      console.log('[Deep Link] Hash fragment:', url.split('#')[1] || 'none');
+      if (url.includes('auth/callback')) {
         extractAndSetSession(url);
         WebBrowser.dismissBrowser();
       }
@@ -234,57 +237,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // ─── OAuth Login ───
-  // NOTE: iOS에서는 openBrowserAsync(SFSafariViewController)를 사용하여
-  // CJK 폰트 렌더링 이슈를 해결한다. 콜백은 딥링크 리스너가 처리.
-  // Android에서는 openAuthSessionAsync(Chrome Custom Tabs) 유지.
   const login = async (provider: LoginProvider) => {
     if (provider === 'email') return;
+    // TODO: implement naver native OAuth
+    if (provider === 'naver') return;
 
-    // Apple Sign In이 비활성화 상태면 무시 (D-02)
-    if (provider === 'apple' && !APPLE_SIGNIN_ENABLED) return;
-
-    // Naver OIDC 커스텀 provider — Supabase 설정 완료 후 활성화
-    if (provider === 'naver') {
-      showToast(t('oauth_naver_preparing'), 'info');
-      return;
-    }
-
-    const providerMap: Record<string, Provider> = {
-      google: 'google',
-      apple: 'apple',
-      kakao: 'kakao',
-    };
-
+    const providerMap = { google: 'google', apple: 'apple', kakao: 'kakao' } as const;
     const redirectUrl = Linking.createURL('auth/callback');
-    console.log('[OAuth] redirectUrl:', redirectUrl);
-    console.warn('[OAuth] Supabase Dashboard → Authentication → URL Configuration에 다음 redirect URL이 등록되어 있는지 확인하세요:', redirectUrl);
     pendingOAuthProvider.current = provider;
 
-    if (Platform.OS === 'web') {
-      // 웹: 페이지 전체 리디렉트 방식 — Google COOP 정책과 충돌하는 팝업 대신
-      // Supabase가 직접 리디렉트를 처리하고, detectSessionInUrl이 콜백을 파싱한다.
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: providerMap[provider],
-        options: {
-          redirectTo: window.location.origin + '/auth/callback',
-          skipBrowserRedirect: true,
-        },
-      });
-      if (error) {
-        console.error('[OAuth] signInWithOAuth error:', error);
-        pendingOAuthProvider.current = null;
-        showToast(t('oauth_error'), 'error');
-        return;
-      }
-      if (data?.url) {
-        console.log('[OAuth] Web: redirecting to', data.url);
-        window.location.href = data.url;
-      }
-      return;
-    }
+    // Dev/Production 스킴 차이 진단 로그
+    console.log('[OAuth] redirectUrl:', redirectUrl);
+    console.log('[OAuth] Expected scheme: udamon://, got:', redirectUrl.split('://')[0] + '://');
 
-    // 네이티브: WebBrowser (Chrome Custom Tabs / ASWebAuthenticationSession)
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: providerMap[provider],
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
@@ -293,81 +258,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       console.error('[OAuth] signInWithOAuth error:', error);
       pendingOAuthProvider.current = null;
-      showToast(t('oauth_error'), 'error');
       return;
     }
 
-    console.log('[OAuth] Opening auth URL:', data?.url);
-
     if (data?.url) {
-      // URL 유효성 검증 — Supabase가 비정상 URL을 반환하는 경우 방어
-      try {
-        const parsed = new URL(data.url);
-        if (parsed.protocol !== 'https:') {
-          console.error('[OAuth] Non-HTTPS auth URL:', data.url);
-          pendingOAuthProvider.current = null;
-          showToast(t('oauth_url_invalid'), 'error');
-          return;
-        }
-      } catch {
-        console.error('[OAuth] Invalid auth URL:', data.url);
-        pendingOAuthProvider.current = null;
-        showToast(t('oauth_url_invalid'), 'error');
-        return;
-      }
-
-      if (Platform.OS === 'ios') {
-        // SFSafariViewController -- CJK 폰트 정상 렌더링
-        // 콜백은 Linking.addEventListener('url', ...) 딥링크 리스너가 처리
+      console.log('[OAuth] Auth URL:', data.url);
+      // 카카오 OAuth 도메인 검증
+      if (provider === 'kakao') {
         try {
-          console.log('[OAuth] iOS: opening SFSafariViewController');
-          await WebBrowser.openBrowserAsync(data.url, {
-            dismissButtonStyle: 'cancel',
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-          });
-          // openBrowserAsync는 브라우저가 닫힐 때 resolve됨
-          // 사용자가 수동으로 닫은 경우 정리
-          if (pendingOAuthProvider.current) {
-            pendingOAuthProvider.current = null;
+          const authHost = new URL(data.url).hostname;
+          console.log('[OAuth] Kakao auth URL domain:', authHost);
+          if (!authHost.includes('kakao')) {
+            console.warn('[OAuth] Unexpected Kakao auth domain:', authHost);
           }
-        } catch (err: unknown) {
-          console.error('[OAuth] WebBrowser error:', err);
-          pendingOAuthProvider.current = null;
-          showToast(t('oauth_error'), 'error');
+        } catch (e: unknown) {
+          console.error('[OAuth] Failed to parse auth URL:', e instanceof Error ? e.message : 'unknown');
         }
+      }
+      if (Platform.OS === 'android') {
+        // Android Custom Tabs can't reliably detect scheme redirects in Expo Go.
+        // Open in system browser and let deep link listener handle the callback.
+        await Linking.openURL(data.url);
       } else {
-        // Android: openAuthSessionAsync (Chrome Custom Tabs, CJK 정상 작동)
         try {
-          console.log('[OAuth] Android: opening Chrome Custom Tab');
           const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          console.log('[OAuth] WebBrowser result:', result.type);
           if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
             await extractAndSetSession(result.url);
-          } else if (result.type === 'cancel') {
-            pendingOAuthProvider.current = null;
           }
-        } catch (err: unknown) {
+        } catch (err) {
           console.error('[OAuth] WebBrowser error:', err);
           pendingOAuthProvider.current = null;
-          showToast(t('oauth_error'), 'error');
         }
       }
-    } else {
-      console.error('[OAuth] No auth URL returned from Supabase');
-      pendingOAuthProvider.current = null;
-      showToast(t('oauth_url_error'), 'error');
     }
   };
 
-  // ─── Email Login ───
   const loginWithEmail = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    // Dev test accounts — bypass Supabase, persist to AsyncStorage
+    const testAcct = TEST_ACCOUNTS[email];
+    if (testAcct && password === testAcct.password) {
+      setUser(testAcct.profile);
+      setLoginProvider('email');
+      setIsPhotographer(testAcct.isPhotographer);
+      setPhotographerId(testAcct.isPhotographer ? testAcct.profile.id : null);
+      setGuestMode(false);
+      setLoading(false);
+      await AsyncStorage.setItem(TEST_ACCOUNT_KEY, email).catch(() => {});
+      return { success: true };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { success: false, error: error.message };
     setLoginProvider('email');
     return { success: true };
   };
 
-  // ─── Email Sign Up ───
   const signUpWithEmail = async (email: string, password: string, username: string): Promise<{ success: boolean; error?: string }> => {
     const { error } = await supabase.auth.signUp({
       email, password,
@@ -378,46 +323,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   };
 
-  // ─── Guest Mode ───
   const loginAsGuest = () => {
     setGuestMode(true);
     setLoading(false);
   };
 
-  // ─── Logout ───
   const logout = async () => {
+    await AsyncStorage.removeItem(TEST_ACCOUNT_KEY).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
     setUser(null); setSession(null); setLoginProvider(null);
     setIsPhotographer(false); setPhotographerId(null); setGuestMode(false);
   };
 
-  // ─── Profile Updates ───
-  const NICKNAME_CHANGE_LIMIT_DAYS = 30;
-
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return;
-
-    // 닉네임 변경 30일 제한 체크 (D-07)
-    if (updates.nickname && updates.nickname !== user.nickname) {
-      if (user.nickname_changed_at) {
-        const lastChanged = new Date(user.nickname_changed_at);
-        const daysSince = (Date.now() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSince < NICKNAME_CHANGE_LIMIT_DAYS) {
-          showToast(t('nickname_change_limit', { days: Math.ceil(NICKNAME_CHANGE_LIMIT_DAYS - daysSince) }), 'error');
-          return;
-        }
-      }
-      updates.nickname_changed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase.from('users').update(updates).eq('id', user.id);
-    if (error) {
-      console.error('updateUserProfile error:', error);
-      showToast(t('profile_update_error'), 'error');
-      return;
+    // Test accounts — apply locally only
+    const isTestAccount = user.id.startsWith('test-user-');
+    if (!isTestAccount) {
+      const { error } = await supabase.from('users').update(updates).eq('id', user.id);
+      if (error) { console.error('updateUserProfile error:', error); return; }
     }
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
-  }, [user, showToast, t]);
+  }, [user]);
 
   const refreshUser = useCallback(async () => {
     if (!session?.user) return;
@@ -440,7 +367,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   }, [user]);
 
-  // ─── Password Reset ───
   const resetPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
     const redirectUrl = Linking.createURL('auth/reset');
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl });
