@@ -317,11 +317,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        if (provider === 'kakao' && Platform.OS === 'ios') {
-          // iOS의 ASWebAuthenticationSession은 CJK 폰트 렌더링 이슈가 있어
+        if (Platform.OS === 'ios') {
+          // iOS: ASWebAuthenticationSession이 iOS 26 beta에서 URL을 열지 못하는 이슈가 있어
           // SFSafariViewController(openBrowserAsync)를 사용한다.
-          // OAuth 콜백은 deep link 리스너(line ~225)가 처리한다.
+          // OAuth 콜백은 deep link 리스너가 처리한다.
+          console.log('[OAuth] iOS: opening with SFSafariViewController');
           await WebBrowser.openBrowserAsync(data.url);
+          // openBrowserAsync는 브라우저 닫힘 시 resolve됨
+          // 콜백 미수신 시 pendingOAuthProvider 정리
+          if (pendingOAuthProvider.current) {
+            pendingOAuthProvider.current = null;
+          }
         } else {
           const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
             preferEphemeralSession: false,
