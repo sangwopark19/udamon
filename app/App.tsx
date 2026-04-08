@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
-import { useFonts } from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
 
 import type { RootStackParamList } from './src/types/navigation';
 import { colors } from './src/constants/colors';
@@ -85,7 +85,6 @@ import PopularPhotographersScreen from './src/screens/home/PopularPhotographersS
 import PhotographerTermsScreen from './src/screens/settings/PhotographerTermsScreen';
 import CopyrightPolicyScreen from './src/screens/settings/CopyrightPolicyScreen';
 import AnnouncementsScreen from './src/screens/settings/AnnouncementsScreen';
-import ProfileSetupScreen from './src/screens/onboarding/ProfileSetupScreen';
 
 import AdminDashboardScreen from './src/screens/admin/AdminDashboardScreen';
 import AdminPostReviewScreen from './src/screens/admin/AdminPostReviewScreen';
@@ -96,11 +95,6 @@ import AdminAnnouncementScreen from './src/screens/admin/AdminAnnouncementScreen
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-// OAuth 콜백 전용 스크린 — 실제 처리는 AuthContext의 Linking.addEventListener가 담당
-function AuthCallbackScreen() {
-  return null;
-}
-
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [
     Linking.createURL('/'),
@@ -109,7 +103,6 @@ const linking: LinkingOptions<RootStackParamList> = {
   ],
   config: {
     screens: {
-      AuthCallback: 'auth/callback',
       PostDetail: 'post/:postId',
       PhotographerProfile: 'photographer/:photographerId',
       MainTabs: {
@@ -170,24 +163,27 @@ function PushHandler() {
 }
 
 function AppNavigator() {
-  const { loading, isAuthenticated, guestMode, user } = useAuth();
+  const { loading, isAuthenticated, guestMode } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+
+  // iOS 빌드타임 임베딩(app.json expo-font)과 별개로, 런타임 폰트 로딩도 보장
+  const [fontsLoaded, fontsError] = useFonts({
+    ...Ionicons.font,
+  });
+
+  useEffect(() => {
+    if (fontsError) {
+      console.error('[Font] Failed to load Ionicons:', fontsError);
+    }
+  }, [fontsError]);
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding_complete').then((v) => setOnboardingDone(v === 'true'));
   }, []);
 
-  if (loading || onboardingDone === null) return <SplashScreen />;
+  if (loading || onboardingDone === null || (!fontsLoaded && !fontsError)) return <SplashScreen />;
 
   const canBrowse = isAuthenticated || guestMode;
-  const needsProfileSetup = isAuthenticated && user !== null && !user.nickname;
-
-  const getInitialRoute = (): keyof RootStackParamList => {
-    if (!canBrowse) return 'Login';
-    if (!onboardingDone) return 'Onboarding';
-    if (needsProfileSetup) return 'ProfileSetup';
-    return 'MainTabs';
-  };
 
   return (
     <NavigationContainer linking={linking}>
@@ -195,7 +191,7 @@ function AppNavigator() {
       <StatusBar style="dark" backgroundColor={colors.background} />
       <RootStack.Navigator
         key={canBrowse ? 'main' : 'auth'}
-        initialRouteName={getInitialRoute()}
+        initialRouteName={canBrowse && !onboardingDone ? 'Onboarding' : canBrowse ? 'MainTabs' : 'Login'}
         screenOptions={{ headerShown: false }}
       >
         {canBrowse ? (
@@ -224,7 +220,6 @@ function AppNavigator() {
             <RootStack.Screen name="Studio" component={StudioScreen} />
             <RootStack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
             <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
-            <RootStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
             <RootStack.Screen name="ContactSupport" component={ContactSupportScreen} />
             <RootStack.Screen name="InquiryList" component={InquiryListScreen} />
             <RootStack.Screen name="InquiryDetail" component={InquiryDetailScreen} />
@@ -243,7 +238,6 @@ function AppNavigator() {
             <RootStack.Screen name="AdminUserManage" component={AdminUserManageScreen} />
             <RootStack.Screen name="AdminPhotographerReview" component={AdminPhotographerReviewScreen} />
             <RootStack.Screen name="AdminAnnouncement" component={AdminAnnouncementScreen} />
-            <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           </>
         ) : (
           <>
@@ -252,7 +246,6 @@ function AppNavigator() {
             <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <RootStack.Screen name="Terms" component={TermsScreen} />
             <RootStack.Screen name="Privacy" component={PrivacyScreen} />
-            <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           </>
         )}
       </RootStack.Navigator>
@@ -261,12 +254,6 @@ function AppNavigator() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    ...Ionicons.font,
-  });
-
-  if (!fontsLoaded) return <SplashScreen />;
-
   return (
     <ErrorBoundary>
     <SafeAreaProvider>
