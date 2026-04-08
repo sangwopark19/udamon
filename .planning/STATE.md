@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: Roadmap and state initialized
 last_updated: "2026-04-08T01:09:21.734Z"
-last_activity: 2026-04-08 -- Completed quick task 260408-kv5
+last_activity: 2026-04-08 -- Completed quick task 260408-nuf
 progress:
   total_phases: 6
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 02 (authentication) — EXECUTING
 Plan: 1 of 5
 Status: Executing Phase 02
-Last activity: 2026-04-08 -- Completed quick task 260408-kv5: iOS 시뮬레이터 카카오 로그인 한글 깨짐 및 구글 로그인 URL 오류 수정
+Last activity: 2026-04-08 -- Completed quick task 260408-nuf: iOS OAuth CJK 폰트 렌더링 수정
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -83,6 +83,7 @@ None yet.
 | 260408-kcl | 소셜 로그인 OAuth 플로우 수정 (env 변수명 + 웹 콜백) | 2026-04-08 | d48a746 | [260408-kcl-oauth](./quick/260408-kcl-oauth/) |
 | 260408-kv5 | iOS 시뮬레이터 카카오 로그인 한글 깨짐 및 구글 로그인 URL 오류 수정 | 2026-04-08 | 6c02663 | [260408-kv5-ios-url](./quick/260408-kv5-ios-url/) |
 | 260408-m7c | iOS OAuth openBrowserAsync 전환 (ASWebAuthenticationSession 버그 우회) | 2026-04-08 | 8f6b32d | [260408-m7c-ios-oauth-openbrowserasync-aswebauthenti](./quick/260408-m7c-ios-oauth-openbrowserasync-aswebauthenti/) |
+| 260408-nuf | iOS 시뮬레이터에서 한글 텍스트가 ?로 표시되는 폰트 렌더링 버그 수정 | 2026-04-08 | 524dae5 | [260408-nuf-ios](./quick/260408-nuf-ios/) |
 
 ## Session Continuity
 
