@@ -74,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = user !== null;
   const isGuest = !isAuthenticated;
   const pendingOAuthProvider = useRef<LoginProvider | null>(null);
+  const isProcessingCallback = useRef(false);
 
   // ─── User Profile Fetch ───
   const fetchUserProfile = async (authUser: User): Promise<UserProfile | null> => {
@@ -89,6 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ─── OAuth Session Extraction ───
   /** Extract code or tokens from an OAuth redirect URL and establish session */
   const extractAndSetSession = async (url: string) => {
+    // 중복 콜백 방지 — WebBrowser 콜백과 Deep Link 리스너가 동시에 호출될 수 있다
+    if (isProcessingCallback.current) {
+      console.log('[OAuth] Skipping duplicate callback');
+      return;
+    }
+
     // URL 유효성 검증 — auth/callback 경로가 아니면 무시
     if (!url || !url.includes('auth/callback')) {
       console.warn('[OAuth] Unexpected callback URL format:', url);
@@ -96,44 +103,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    console.log('[OAuth] extractAndSetSession URL:', url);
-    const provider = pendingOAuthProvider.current;
+    isProcessingCallback.current = true;
+    try {
+      console.log('[OAuth] extractAndSetSession URL:', url);
+      const provider = pendingOAuthProvider.current;
 
-    // Parse query params & hash fragment
-    const qs = url.split('?')[1]?.split('#')[0] ?? '';
-    const hash = url.split('#')[1] ?? '';
-    const qp = new URLSearchParams(qs);
-    const hp = new URLSearchParams(hash);
+      // Parse query params & hash fragment
+      const qs = url.split('?')[1]?.split('#')[0] ?? '';
+      const hash = url.split('#')[1] ?? '';
+      const qp = new URLSearchParams(qs);
+      const hp = new URLSearchParams(hash);
 
-    const code = qp.get('code') || hp.get('code');
-    const accessToken = hp.get('access_token') || qp.get('access_token');
-    const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
-    console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
+      const code = qp.get('code') || hp.get('code');
+      const accessToken = hp.get('access_token') || qp.get('access_token');
+      const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
+      console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
 
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        console.error('[OAuth] Code exchange error:', error);
-        showToast(t('oauth_error'), 'error');
-      } else if (provider) {
-        setLoginProvider(provider);
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          console.error('[OAuth] Code exchange error:', error);
+          showToast(t('oauth_error'), 'error');
+        } else {
+          if (provider) setLoginProvider(provider);
+          // 웹: 콜백 URL 정리 — /auth/callback 에 머물면 재파싱 가능
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.history.replaceState({}, '', '/');
+          }
+        }
+      } else if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (error) {
+          console.error('[OAuth] Set session error:', error);
+          showToast(t('oauth_error'), 'error');
+        } else {
+          if (provider) setLoginProvider(provider);
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.history.replaceState({}, '', '/');
+          }
+        }
+      } else {
+        console.warn('[OAuth] No code or tokens found in URL');
       }
-    } else if (accessToken && refreshToken) {
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (error) {
-        console.error('[OAuth] Set session error:', error);
-        showToast(t('oauth_error'), 'error');
-      } else if (provider) {
-        setLoginProvider(provider);
-      }
-    } else {
-      console.warn('[OAuth] No code or tokens found in URL');
+
+      pendingOAuthProvider.current = null;
+    } finally {
+      isProcessingCallback.current = false;
     }
-
-    pendingOAuthProvider.current = null;
   };
 
   // ─── Initialization & Auth State Listener ───
@@ -183,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Deep link fallback — catches OAuth redirect when openAuthSessionAsync misses it
     const linkSubscription = Linking.addEventListener('url', ({ url }) => {
       console.log('[Deep Link] URL received:', url, 'pendingOAuth:', pendingOAuthProvider.current);
-      if (url.includes('auth/callback')) {
+      if (url.includes('auth/callback') && pendingOAuthProvider.current) {
         extractAndSetSession(url);
         WebBrowser.dismissBrowser();
       }
@@ -215,8 +234,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const redirectUrl = Linking.createURL('auth/callback');
+    console.log('[OAuth] redirectUrl:', redirectUrl);
     pendingOAuthProvider.current = provider;
 
+    if (Platform.OS === 'web') {
+      // 웹: 페이지 전체 리디렉트 방식 — Google COOP 정책과 충돌하는 팝업 대신
+      // Supabase가 직접 리디렉트를 처리하고, detectSessionInUrl이 콜백을 파싱한다.
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: providerMap[provider],
+        options: {
+          redirectTo: window.location.origin + '/auth/callback',
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) {
+        console.error('[OAuth] signInWithOAuth error:', error);
+        pendingOAuthProvider.current = null;
+        showToast(t('oauth_error'), 'error');
+        return;
+      }
+      if (data?.url) {
+        console.log('[OAuth] Web: redirecting to', data.url);
+        window.location.href = data.url;
+      }
+      return;
+    }
+
+    // 네이티브: WebBrowser (Chrome Custom Tabs / ASWebAuthenticationSession)
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: providerMap[provider],
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
@@ -229,30 +273,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    console.log('[OAuth] Opening auth URL:', data?.url);
+
     if (data?.url) {
-      if (Platform.OS === 'android') {
-        // Android Custom Tabs can't reliably detect scheme redirects in Expo Go.
-        // Open in system browser and let deep link listener handle the callback.
-        await Linking.openURL(data.url);
-        // 60초 내 콜백이 없으면 pending state를 정리한다.
-        setTimeout(() => {
-          if (pendingOAuthProvider.current === provider) {
-            console.warn('[OAuth] Android callback timeout — clearing pending provider');
-            pendingOAuthProvider.current = null;
-          }
-        }, 60_000);
-      } else {
-        try {
-          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-          if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
-            await extractAndSetSession(result.url);
-          }
-          // result.type === 'cancel' — 사용자 취소 시 무시 (D-11)
-        } catch (err: unknown) {
-          console.error('[OAuth] WebBrowser error:', err);
+      try {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        console.log('[OAuth] WebBrowser result:', result.type);
+        if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
+          await extractAndSetSession(result.url);
+        } else if (result.type === 'cancel') {
           pendingOAuthProvider.current = null;
-          showToast(t('oauth_error'), 'error');
         }
+      } catch (err: unknown) {
+        console.error('[OAuth] WebBrowser error:', err);
+        pendingOAuthProvider.current = null;
+        showToast(t('oauth_error'), 'error');
       }
     }
   };
