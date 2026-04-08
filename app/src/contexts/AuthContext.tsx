@@ -159,6 +159,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const init = async () => {
       try {
+        // 웹: /auth/callback에 토큰이 있으면 수동으로 세션 설정
+        // detectSessionInUrl 대신 setSession()으로 직접 처리 (getUser() 401 회피)
+        if (Platform.OS === 'web' && typeof window !== 'undefined' &&
+            window.location.href.includes('auth/callback') &&
+            (window.location.hash.includes('access_token') || window.location.hash.includes('code'))) {
+          await extractAndSetSession(window.location.href);
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         if (session?.user) {
@@ -167,6 +175,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
         }
       } catch { /* Supabase unreachable */ }
+
+      // 웹: OAuth 콜백 URL 정리
+      if (Platform.OS === 'web' && typeof window !== 'undefined' &&
+          window.location.pathname.includes('/auth/callback')) {
+        window.history.replaceState({}, '', '/');
+      }
+
       setLoading(false);
     };
 
@@ -181,6 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const profile = await fetchUserProfile(session.user);
           setUser(profile);
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
+        }
+        // 웹: OAuth 콜백 URL 정리 (init보다 onAuthStateChange가 늦게 올 수 있다)
+        if (Platform.OS === 'web' && typeof window !== 'undefined' &&
+            window.location.pathname.includes('/auth/callback')) {
+          window.history.replaceState({}, '', '/');
         }
       } else if (event === 'TOKEN_REFRESHED') {
         // 토큰 갱신 시 세션만 업데이트 (프로필 재조회 안 함)

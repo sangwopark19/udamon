@@ -1,9 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_KEY ?? '';
 
 export const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
@@ -20,7 +20,12 @@ export const supabase: SupabaseClient = createClient(
       storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
+      // detectSessionInUrl은 false — getUser() 호출이 401을 반환하는 환경에서
+      // 세션 수립이 실패한다. 콜백 처리는 AuthContext의 init()에서 수동으로 한다.
       detectSessionInUrl: false,
+      // 웹: implicit flow — 페이지 리디렉트 시 PKCE code_verifier가 유실된다.
+      // 네이티브: PKCE flow — deep link 콜백이므로 페이지 리디렉트가 없다.
+      flowType: Platform.OS === 'web' ? 'implicit' : 'pkce',
     },
   },
 );
