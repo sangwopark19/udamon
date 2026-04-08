@@ -556,6 +556,8 @@ export default {
   login_continue_naver: '네이버로 계속하기',
   login_preparing: '(준비 중)',
   oauth_error: '로그인에 실패했습니다. 다시 시도해주세요.',
+  oauth_url_error: '로그인 URL을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.',
+  oauth_url_invalid: '로그인 URL이 유효하지 않습니다. 관리자에게 문의해주세요.',
   oauth_naver_preparing: '네이버 로그인은 준비 중입니다.',
   session_expired: '세션이 만료되었습니다. 다시 로그인해주세요.',
   login_error_invalid_email: '올바른 이메일을 입력하세요.',

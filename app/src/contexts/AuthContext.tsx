@@ -235,6 +235,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ─── OAuth Login ───
+  // NOTE: iOS Simulator의 ASWebAuthenticationSession은 CJK 폰트 렌더링에
+  // 제한이 있어 Kakao 로그인 화면에서 한글이 "?" 박스로 표시될 수 있다.
+  // 이는 시뮬레이터 전용 이슈이며, 실제 기기에서는 정상 렌더링된다.
   const login = async (provider: LoginProvider) => {
     if (provider === 'email') return;
 
@@ -296,8 +299,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[OAuth] Opening auth URL:', data?.url);
 
     if (data?.url) {
+      // URL 유효성 검증 — Supabase가 비정상 URL을 반환하는 경우 방어
       try {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        const parsed = new URL(data.url);
+        if (parsed.protocol !== 'https:') {
+          console.error('[OAuth] Non-HTTPS auth URL:', data.url);
+          pendingOAuthProvider.current = null;
+          showToast(t('oauth_url_invalid'), 'error');
+          return;
+        }
+      } catch {
+        console.error('[OAuth] Invalid auth URL:', data.url);
+        pendingOAuthProvider.current = null;
+        showToast(t('oauth_url_invalid'), 'error');
+        return;
+      }
+
+      try {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+          preferEphemeralSession: false,
+        });
         console.log('[OAuth] WebBrowser result:', result.type);
         if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
           await extractAndSetSession(result.url);
@@ -309,6 +330,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         pendingOAuthProvider.current = null;
         showToast(t('oauth_error'), 'error');
       }
+    } else {
+      console.error('[OAuth] No auth URL returned from Supabase');
+      pendingOAuthProvider.current = null;
+      showToast(t('oauth_url_error'), 'error');
     }
   };
 
