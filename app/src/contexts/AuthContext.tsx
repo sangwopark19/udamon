@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
+import type { Provider } from '@supabase/auth-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useTranslation } from 'react-i18next';
@@ -88,6 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ─── OAuth Session Extraction ───
   /** Extract code or tokens from an OAuth redirect URL and establish session */
   const extractAndSetSession = async (url: string) => {
+    // URL 유효성 검증 — auth/callback 경로가 아니면 무시
+    if (!url || !url.includes('auth/callback')) {
+      console.warn('[OAuth] Unexpected callback URL format:', url);
+      pendingOAuthProvider.current = null;
+      return;
+    }
+
     console.log('[OAuth] extractAndSetSession URL:', url);
     const provider = pendingOAuthProvider.current;
 
@@ -194,18 +202,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Apple Sign In이 비활성화 상태면 무시 (D-02)
     if (provider === 'apple' && !APPLE_SIGNIN_ENABLED) return;
 
-    const providerMap: Record<string, string> = {
+    // Naver OIDC 커스텀 provider — Supabase 설정 완료 후 활성화
+    if (provider === 'naver') {
+      showToast(t('oauth_naver_preparing'), 'info');
+      return;
+    }
+
+    const providerMap: Record<string, Provider> = {
       google: 'google',
       apple: 'apple',
       kakao: 'kakao',
-      naver: 'custom:naver',
     };
 
     const redirectUrl = Linking.createURL('auth/callback');
     pendingOAuthProvider.current = provider;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: providerMap[provider] as 'google' | 'apple' | 'kakao',
+      provider: providerMap[provider],
       options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
     });
 
@@ -221,6 +234,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Android Custom Tabs can't reliably detect scheme redirects in Expo Go.
         // Open in system browser and let deep link listener handle the callback.
         await Linking.openURL(data.url);
+        // 60초 내 콜백이 없으면 pending state를 정리한다.
+        setTimeout(() => {
+          if (pendingOAuthProvider.current === provider) {
+            console.warn('[OAuth] Android callback timeout — clearing pending provider');
+            pendingOAuthProvider.current = null;
+          }
+        }, 60_000);
       } else {
         try {
           const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);

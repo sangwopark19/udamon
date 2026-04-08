@@ -556,6 +556,7 @@ export default {
   login_continue_naver: '네이버로 계속하기',
   login_preparing: '(준비 중)',
   oauth_error: '로그인에 실패했습니다. 다시 시도해주세요.',
+  oauth_naver_preparing: '네이버 로그인은 준비 중입니다.',
   session_expired: '세션이 만료되었습니다. 다시 로그인해주세요.',
   login_error_invalid_email: '올바른 이메일을 입력하세요.',
   login_error_password_short: '비밀번호는 8자 이상이어야 합니다.',
