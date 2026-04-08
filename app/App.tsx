@@ -94,6 +94,11 @@ import AdminAnnouncementScreen from './src/screens/admin/AdminAnnouncementScreen
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
+// OAuth 콜백 전용 스크린 — 실제 처리는 AuthContext의 Linking.addEventListener가 담당
+function AuthCallbackScreen() {
+  return null;
+}
+
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: [
     Linking.createURL('/'),
@@ -102,6 +107,7 @@ const linking: LinkingOptions<RootStackParamList> = {
   ],
   config: {
     screens: {
+      AuthCallback: 'auth/callback',
       PostDetail: 'post/:postId',
       PhotographerProfile: 'photographer/:photographerId',
       MainTabs: {
@@ -235,6 +241,7 @@ function AppNavigator() {
             <RootStack.Screen name="AdminUserManage" component={AdminUserManageScreen} />
             <RootStack.Screen name="AdminPhotographerReview" component={AdminPhotographerReviewScreen} />
             <RootStack.Screen name="AdminAnnouncement" component={AdminAnnouncementScreen} />
+            <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           </>
         ) : (
           <>
@@ -243,6 +250,7 @@ function AppNavigator() {
             <RootStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <RootStack.Screen name="Terms" component={TermsScreen} />
             <RootStack.Screen name="Privacy" component={PrivacyScreen} />
+            <RootStack.Screen name="AuthCallback" component={AuthCallbackScreen} options={{ headerShown: false }} />
           </>
         )}
       </RootStack.Navigator>

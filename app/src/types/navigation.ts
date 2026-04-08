@@ -48,6 +48,9 @@ export type RootStackParamList = {
 
   Announcements: undefined;
 
+  // OAuth callback (deep link 수신용 — 실제 처리는 AuthContext의 Linking listener가 담당)
+  AuthCallback: { code?: string; access_token?: string; refresh_token?: string } | undefined;
+
   // Admin
   AdminDashboard: undefined;
   AdminPostReview: undefined;
