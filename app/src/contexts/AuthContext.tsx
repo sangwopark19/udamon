@@ -258,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const redirectUrl = Linking.createURL('auth/callback');
     console.log('[OAuth] redirectUrl:', redirectUrl);
+    console.warn('[OAuth] Supabase Dashboard → Authentication → URL Configuration에 다음 redirect URL이 등록되어 있는지 확인하세요:', redirectUrl);
     pendingOAuthProvider.current = provider;
 
     if (Platform.OS === 'web') {
@@ -316,14 +317,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-          preferEphemeralSession: false,
-        });
-        console.log('[OAuth] WebBrowser result:', result.type);
-        if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
-          await extractAndSetSession(result.url);
-        } else if (result.type === 'cancel') {
-          pendingOAuthProvider.current = null;
+        if (provider === 'kakao' && Platform.OS === 'ios') {
+          // iOS의 ASWebAuthenticationSession은 CJK 폰트 렌더링 이슈가 있어
+          // SFSafariViewController(openBrowserAsync)를 사용한다.
+          // OAuth 콜백은 deep link 리스너(line ~225)가 처리한다.
+          await WebBrowser.openBrowserAsync(data.url);
+        } else {
+          const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+            preferEphemeralSession: false,
+          });
+          console.log('[OAuth] WebBrowser result:', result.type);
+          if (result.type === 'success' && result.url && pendingOAuthProvider.current) {
+            await extractAndSetSession(result.url);
+          } else if (result.type === 'cancel') {
+            pendingOAuthProvider.current = null;
+          }
         }
       } catch (err: unknown) {
         console.error('[OAuth] WebBrowser error:', err);
