@@ -20,8 +20,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.udamonfan.app",
       "associatedDomains": [
+        "applinks:udamonfan.com",
         "applinks:udamonfan.com"
-      ]
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -70,9 +74,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "bdc10dd6-5555-4594-a592-8c1e1ba17e8c"
+        "projectId": "8797f3a3-c94b-4cae-bc7f-d90e5a6cd3d6"
       }
     },
-    "owner": "dohakimm"
+    "owner": "sangwopark19icons"
   }
 }
