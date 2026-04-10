@@ -207,7 +207,11 @@ export default function CommunityPostDetailScreen() {
           },
           { text: t('btn_cancel'), style: 'cancel' as const },
         ];
-    Alert.alert('', '', buttons);
+    Alert.alert(
+      t('community_post_action_title'),
+      t('community_post_action_message'),
+      buttons,
+    );
   }, [post, currentUserId, handleDeletePost, handleReportPost, handleBlockUser, t]);
 
   const handleSubmitComment = useCallback(async () => {
@@ -244,6 +248,8 @@ export default function CommunityPostDetailScreen() {
           const ok = await deleteComment(commentId);
           if (ok) {
             showToast(t('toast_comment_deleted'), 'success');
+          } else {
+            showToast(t('community_comment_delete_failed'), 'error');
           }
         },
       },

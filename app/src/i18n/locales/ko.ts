@@ -137,6 +137,9 @@ export default {
   community_vote_expired: '마감된 투표입니다',
   community_post_load_retry: '다시 시도',
   community_anon_action_required: '로그인이 필요한 기능입니다',
+  community_post_action_title: '게시글',
+  community_post_action_message: '이 게시글에 대한 작업을 선택하세요',
+  community_comment_delete_failed: '댓글을 삭제하지 못했어요',
 
   // Community Write
   write_title: '글쓰기',
