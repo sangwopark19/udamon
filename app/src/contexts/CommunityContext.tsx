@@ -26,9 +26,24 @@ import {
   fetchPostWithPoll,
   fetchUserCommunityLikes,
   fetchRecentSearches as apiFetchRecentSearches,
+  createCommunityPost,
+  updateCommunityPost,
+  deleteCommunityPost,
+  createCommunityComment,
+  updateCommunityComment,
+  deleteCommunityComment,
+  toggleCommunityLike,
+  voteCommunityPoll,
+  reportCommunityTarget,
+  searchCommunityPosts,
+  addRecentSearch as apiAddRecentSearch,
+  removeRecentSearch as apiRemoveRecentSearch,
+  clearRecentSearches as apiClearRecentSearches,
 } from '../services/communityApi';
 import { useAuth } from './AuthContext';
 import { useBlock } from './BlockContext';
+import { useToast } from './ToastContext';
+import { useTranslation } from 'react-i18next';
 
 const PAGE_SIZE = 20;
 
@@ -101,6 +116,8 @@ const CommunityContext = createContext<CommunityContextValue | null>(null);
 export function CommunityProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { blockedUsersVersion } = useBlock();
+  const { showToast } = useToast();
+  const { t } = useTranslation();
   const userId = user?.id ?? null;
 
   // Accumulated page state
@@ -296,36 +313,69 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   }, [currentTeam, currentSort]);
 
   // ═══════════════════════════════════════════════════════════════
-  // Posts — Mutations (STUBS — implemented in Task 2)
+  // Posts — Mutations
   // ═══════════════════════════════════════════════════════════════
   const createPost = useCallback(
     async (
-      _input: CreatePostInput,
-      _pollInput?: CreatePollInput,
+      input: CreatePostInput,
+      pollInput?: CreatePollInput,
     ): Promise<CommunityPostWithAuthor | null> => {
-      // IMPLEMENTED IN TASK 2
-      return null;
+      if (!userId) return null;
+      const result = await createCommunityPost({
+        userId,
+        teamSlug: input.team_id,
+        title: input.title,
+        content: input.content,
+        images: input.images ?? [],
+        pollInput,
+      });
+      if (result.error || !result.data) {
+        return null;
+      }
+      const created = result.data;
+      setPosts((prev) => [created, ...prev]);
+      return created;
     },
-    [],
+    [userId],
   );
 
   const updatePost = useCallback(
-    async (_postId: string, _input: UpdatePostInput): Promise<boolean> => {
-      // IMPLEMENTED IN TASK 2
-      return false;
+    async (postId: string, input: UpdatePostInput): Promise<boolean> => {
+      const result = await updateCommunityPost(postId, {
+        title: input.title,
+        content: input.content,
+        images: input.images,
+      });
+      if (result.error || !result.data) return false;
+      const updated = result.data;
+      setPosts((prev) => prev.map((p) => (p.id === postId ? updated : p)));
+      return true;
     },
     [],
   );
 
-  const deletePost = useCallback(async (_postId: string): Promise<boolean> => {
-    // IMPLEMENTED IN TASK 2
-    return false;
+  const deletePost = useCallback(async (postId: string): Promise<boolean> => {
+    const result = await deleteCommunityPost(postId);
+    if (result.error) return false;
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setComments((prev) => {
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+    setPolls((prev) => {
+      const next = { ...prev };
+      delete next[postId];
+      return next;
+    });
+    return true;
   }, []);
 
   const searchPosts = useCallback(
-    async (_query: string): Promise<CommunityPostWithAuthor[]> => {
-      // IMPLEMENTED IN TASK 2
-      return [];
+    async (query: string): Promise<CommunityPostWithAuthor[]> => {
+      const result = await searchCommunityPosts(query);
+      if (result.error || !result.data) return [];
+      return result.data;
     },
     [],
   );
@@ -351,36 +401,160 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createComment = useCallback(
-    async (_input: CreateCommentInput): Promise<CommunityCommentWithAuthor | null> => {
-      // IMPLEMENTED IN TASK 2
-      return null;
+    async (input: CreateCommentInput): Promise<CommunityCommentWithAuthor | null> => {
+      if (!userId) return null;
+      const result = await createCommunityComment({
+        postId: input.post_id,
+        userId,
+        content: input.content,
+        parentCommentId: input.parent_comment_id,
+      });
+      if (result.error || !result.data) return null;
+      const created = result.data;
+      setComments((prev) => ({
+        ...prev,
+        [input.post_id]: [...(prev[input.post_id] ?? []), created],
+      }));
+      // Optimistic local increment — DB trigger is source of truth and will
+      // align on the next refreshPosts() / re-fetch (T-03-02-03 accepted drift).
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === input.post_id ? { ...p, comment_count: p.comment_count + 1 } : p,
+        ),
+      );
+      return created;
     },
-    [],
+    [userId],
   );
 
   const updateComment = useCallback(
-    async (_commentId: string, _content: string): Promise<boolean> => {
-      // IMPLEMENTED IN TASK 2
-      return false;
+    async (commentId: string, content: string): Promise<boolean> => {
+      const result = await updateCommunityComment(commentId, content);
+      if (result.error) return false;
+      setComments((prev) => {
+        const next: Record<string, CommunityCommentWithAuthor[]> = {};
+        for (const [postId, list] of Object.entries(prev)) {
+          next[postId] = list.map((c) =>
+            c.id === commentId
+              ? { ...c, content, is_edited: true, updated_at: new Date().toISOString() }
+              : c,
+          );
+        }
+        return next;
+      });
+      return true;
     },
     [],
   );
 
-  const deleteComment = useCallback(async (_commentId: string): Promise<boolean> => {
-    // IMPLEMENTED IN TASK 2
-    return false;
-  }, []);
+  const deleteComment = useCallback(
+    async (commentId: string): Promise<boolean> => {
+      // Find the post the comment belongs to (for local count decrement)
+      let owningPostId: string | null = null;
+      for (const [postId, list] of Object.entries(comments)) {
+        if (list.some((c) => c.id === commentId)) {
+          owningPostId = postId;
+          break;
+        }
+      }
+      const result = await deleteCommunityComment(commentId);
+      if (result.error) return false;
+      setComments((prev) => {
+        const next: Record<string, CommunityCommentWithAuthor[]> = {};
+        for (const [postId, list] of Object.entries(prev)) {
+          next[postId] = list.map((c) =>
+            c.id === commentId
+              ? { ...c, is_deleted: true, content: '', updated_at: new Date().toISOString() }
+              : c,
+          );
+        }
+        return next;
+      });
+      if (owningPostId) {
+        const pid = owningPostId;
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === pid ? { ...p, comment_count: Math.max(p.comment_count - 1, 0) } : p,
+          ),
+        );
+      }
+      return true;
+    },
+    [comments],
+  );
 
   // ═══════════════════════════════════════════════════════════════
-  // Likes (STUB — implemented in Task 2 with optimistic + rollback)
+  // Likes — Optimistic with rollback (D-10, COMM-12)
+  // RESEARCH §Code Examples §4 verbatim
   // ═══════════════════════════════════════════════════════════════
   const toggleLike = useCallback(
-    async (_targetType: LikeTargetType, _targetId: string): Promise<void> => {
-      // IMPLEMENTED IN TASK 2
-      // Shell exists so useMemo value has a stable reference.
-      return;
+    async (targetType: LikeTargetType, targetId: string): Promise<void> => {
+      if (!userId) return;
+      if (pendingLikeOps.current.has(targetId)) return;
+      pendingLikeOps.current.add(targetId);
+
+      const wasLiked = likedIds.has(targetId);
+      const delta = wasLiked ? -1 : 1;
+
+      // Optimistic: flip likedIds
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.delete(targetId);
+        else next.add(targetId);
+        return next;
+      });
+
+      // Optimistic: adjust like_count on post or comment
+      if (targetType === 'post') {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p.id === targetId ? { ...p, like_count: Math.max(p.like_count + delta, 0) } : p,
+          ),
+        );
+      } else {
+        setComments((prev) => {
+          const next: Record<string, CommunityCommentWithAuthor[]> = {};
+          for (const [pid, list] of Object.entries(prev)) {
+            next[pid] = list.map((c) =>
+              c.id === targetId ? { ...c, like_count: Math.max(c.like_count + delta, 0) } : c,
+            );
+          }
+          return next;
+        });
+      }
+
+      const result = await toggleCommunityLike(userId, targetType, targetId);
+      pendingLikeOps.current.delete(targetId);
+
+      // Rollback on API error
+      if (result.error) {
+        setLikedIds((prev) => {
+          const next = new Set(prev);
+          if (wasLiked) next.add(targetId);
+          else next.delete(targetId);
+          return next;
+        });
+        if (targetType === 'post') {
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === targetId ? { ...p, like_count: Math.max(p.like_count - delta, 0) } : p,
+            ),
+          );
+        } else {
+          setComments((prev) => {
+            const next: Record<string, CommunityCommentWithAuthor[]> = {};
+            for (const [pid, list] of Object.entries(prev)) {
+              next[pid] = list.map((c) =>
+                c.id === targetId ? { ...c, like_count: Math.max(c.like_count - delta, 0) } : c,
+              );
+            }
+            return next;
+          });
+        }
+        showToast(t('community_like_failed'), 'error');
+      }
     },
-    [],
+    [userId, likedIds, showToast, t],
   );
 
   const isLiked = useCallback(
@@ -414,11 +588,45 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   );
 
   const votePoll = useCallback(
-    async (_pollId: string, _optionId: string): Promise<void> => {
-      // IMPLEMENTED IN TASK 2
-      return;
+    async (pollId: string, optionId: string): Promise<void> => {
+      if (!userId) return;
+
+      const result = await voteCommunityPoll({ pollId, optionId, userId });
+      if (result.error) {
+        if (result.error === 'POLL_EXPIRED') {
+          showToast(t('community_vote_expired'), 'error');
+        } else if (result.error === 'POLL_ALREADY_VOTED') {
+          showToast(t('community_vote_failed'), 'error');
+        } else {
+          showToast(t('community_vote_failed'), 'error');
+        }
+        return;
+      }
+
+      // Optimistically update votedPolls + poll option count + total_votes
+      setVotedPolls((prev) => ({
+        ...prev,
+        [pollId]: [...(prev[pollId] ?? []), optionId],
+      }));
+      setPolls((prev) => {
+        const next: Record<string, PollWithOptions> = {};
+        for (const [postId, pl] of Object.entries(prev)) {
+          if (pl.id === pollId) {
+            next[postId] = {
+              ...pl,
+              total_votes: pl.total_votes + 1,
+              options: pl.options.map((o) =>
+                o.id === optionId ? { ...o, vote_count: o.vote_count + 1 } : o,
+              ),
+            };
+          } else {
+            next[postId] = pl;
+          }
+        }
+        return next;
+      });
     },
-    [],
+    [userId, showToast, t],
   );
 
   // ═══════════════════════════════════════════════════════════════
@@ -426,34 +634,76 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   // ═══════════════════════════════════════════════════════════════
   const reportTarget = useCallback(
     async (
-      _targetType: 'post' | 'comment',
-      _targetId: string,
-      _reason: ReportReason,
-      _detail?: string,
+      targetType: 'post' | 'comment',
+      targetId: string,
+      reason: ReportReason,
+      detail?: string,
     ): Promise<boolean> => {
-      // IMPLEMENTED IN TASK 2
-      return false;
+      if (!userId) return false;
+      if (reportedIds.has(targetId)) {
+        showToast(t('community_already_reported'), 'error');
+        return false;
+      }
+      const result = await reportCommunityTarget({
+        reporterId: userId,
+        targetType,
+        targetId,
+        reason,
+        detail,
+      });
+      if (result.error) {
+        if (result.error === 'ALREADY_REPORTED') {
+          setReportedIds((prev) => new Set(prev).add(targetId));
+          showToast(t('community_already_reported'), 'error');
+        } else if (result.error === 'CANNOT_SELF_REPORT') {
+          showToast(t('community_self_report'), 'error');
+        } else {
+          showToast(t('community_report_failed'), 'error');
+        }
+        return false;
+      }
+      setReportedIds((prev) => new Set(prev).add(targetId));
+      showToast(t('toast_report_submitted'), 'success');
+      return true;
     },
-    [],
+    [userId, reportedIds, showToast, t],
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // Recent Searches (STUBS — implemented in Task 2)
+  // Recent Searches (DB-backed, trim handled by DB trigger)
   // ═══════════════════════════════════════════════════════════════
-  const addRecentSearch = useCallback(async (_query: string): Promise<void> => {
-    // IMPLEMENTED IN TASK 2
-    return;
-  }, []);
+  const addRecentSearch = useCallback(
+    async (query: string): Promise<void> => {
+      if (!userId) return;
+      const q = query.trim();
+      if (!q) return;
+      const result = await apiAddRecentSearch(userId, q);
+      if (result.error) return;
+      // Re-fetch to get the authoritative list (trigger may have trimmed to 10)
+      const listResult = await apiFetchRecentSearches(userId);
+      if (!listResult.error && listResult.data) {
+        setRecentSearches(listResult.data);
+      }
+    },
+    [userId],
+  );
 
-  const removeRecentSearch = useCallback(async (_query: string): Promise<void> => {
-    // IMPLEMENTED IN TASK 2
-    return;
-  }, []);
+  const removeRecentSearch = useCallback(
+    async (query: string): Promise<void> => {
+      if (!userId) return;
+      const result = await apiRemoveRecentSearch(userId, query);
+      if (result.error) return;
+      setRecentSearches((prev) => prev.filter((q) => q !== query));
+    },
+    [userId],
+  );
 
   const clearRecentSearches = useCallback(async (): Promise<void> => {
-    // IMPLEMENTED IN TASK 2
-    return;
-  }, []);
+    if (!userId) return;
+    const result = await apiClearRecentSearches(userId);
+    if (result.error) return;
+    setRecentSearches([]);
+  }, [userId]);
 
   // ─── Value ──────────────────────────────────────────────────
   const value = useMemo<CommunityContextValue>(
