@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import type { CommunityPostWithAuthor } from '../../types/community';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 import { timeAgo } from '../../utils/time';
@@ -11,13 +12,26 @@ interface Props {
 }
 
 export default function CommunityPostCard({ post, onPress }: Props) {
+  const { t } = useTranslation();
   const hasImage = post.images.length > 0;
+
+  // D-03: 탈퇴한 사용자 또는 anon-read로 nickname이 비어있는 경우 대체 라벨
+  const isDeletedAuthor = post.user.is_deleted === true;
+  const displayNickname = isDeletedAuthor || !post.user.nickname
+    ? t('deleted_user')
+    : post.user.nickname;
 
   return (
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={() => onPress(post.id)}
       style={styles.container}
+      accessibilityLabel={t('a11y_post_card', {
+        title: post.title,
+        author: displayNickname,
+        likes: post.like_count,
+        comments: post.comment_count,
+      })}
     >
       <View style={styles.body}>
         {/* Header: team tag + trending */}
@@ -55,7 +69,7 @@ export default function CommunityPostCard({ post, onPress }: Props) {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.author}>{post.user.nickname}</Text>
+          <Text style={styles.author}>{displayNickname}</Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.meta}>{timeAgo(post.created_at)}</Text>
           <View style={styles.spacer} />
