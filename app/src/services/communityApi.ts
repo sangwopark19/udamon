@@ -592,11 +592,12 @@ export async function voteCommunityPoll(params: {
 // Fetch post with poll (2-query pattern — D-12 revised per Pitfall 6)
 // ═══════════════════════════════════════════════════════════════
 //
-// WHY 2 queries instead of an embedded `my_votes:community_poll_votes!left(...)`?
-// The embedded select returns ALL poll_votes rows for anyone — RLS only applies
-// per-row and the nested embed joins all rows then tries to filter, which leaks
-// other users' votes. The 2-query pattern keeps votes scoped to the current user
-// via explicit `.eq('user_id', currentUserId)`.
+// WHY 2 queries instead of embedding the current user's votes inside the
+// first post SELECT? An embedded left join on the vote rows returns ALL
+// vote rows for everyone — RLS applies per-row and the nested embed joins
+// all rows then tries to filter, which leaks other users' votes. The
+// 2-query pattern keeps votes scoped to the current user via an explicit
+// `.eq('user_id', currentUserId)` filter in the second query.
 
 export async function fetchPostWithPoll(
   postId: string,
@@ -672,4 +673,226 @@ export async function incrementPostView(postId: string): Promise<ApiResult<void>
     const msg = e instanceof Error ? e.message : 'Unknown error';
     return { data: null, error: msg };
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Mutations — Reports (D-14 error narrowing, Pitfall 7)
+// ═══════════════════════════════════════════════════════════════
+
+export async function reportCommunityTarget(params: {
+  reporterId: string;
+  targetType: 'post' | 'comment';
+  targetId: string;
+  reason: ReportReason;
+  detail?: string;
+}): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase.from('community_reports').insert({
+      reporter_id: params.reporterId,
+      target_type: params.targetType,
+      target_id: params.targetId,
+      reason: params.reason,
+      detail: params.detail ?? null,
+    });
+
+    if (error) {
+      // 23505: UNIQUE(reporter_id, target_type, target_id) — duplicate report
+      if (error.code === '23505') {
+        return { data: null, error: 'ALREADY_REPORTED' };
+      }
+      // P0001: `check_self_report` trigger raised — or fallback regex on
+      // message in case trigger uses a different SQLSTATE
+      if (error.code === 'P0001' || /self|own content/i.test(error.message)) {
+        return { data: null, error: 'CANNOT_SELF_REPORT' };
+      }
+      return { data: null, error: error.message };
+    }
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Search (D-07: ILIKE + player pivot, sanitized per Pitfall 8)
+// ═══════════════════════════════════════════════════════════════
+//
+// WHY sanitize with replace(/[%,]/g, '')?
+// PostgREST `.or('title.ilike.%q%,content.ilike.%q%')` concatenates the
+// query string into a PostgREST filter expression — it is NOT parameterized.
+// Stripping `%` and `,` prevents a malicious query from injecting extra
+// filter clauses. Length cap (50) limits DoS surface.
+
+export async function searchCommunityPosts(
+  query: string,
+): Promise<ApiResult<CommunityPostWithAuthor[]>> {
+  try {
+    // Pitfall 8: strip %, comma — .or() is NOT parameterized
+    const safeQ = query.replace(/[%,]/g, '').trim().slice(0, 50);
+    if (!safeQ) return { data: [], error: null };
+
+    await ensureSlugMaps();
+
+    // Query 1: posts where title or content matches
+    const { data: byText, error: err1 } = await supabase
+      .from('community_posts')
+      .select(`
+        *,
+        author:users!user_id (nickname, avatar_url, is_deleted),
+        team:teams (name_ko)
+      `)
+      .or(`title.ilike.%${safeQ}%,content.ilike.%${safeQ}%`)
+      .eq('is_blinded', false)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (err1) return { data: null, error: err1.message };
+
+    // Query 2: player name match → pivot to posts in those teams
+    const { data: matchedPlayers } = await supabase
+      .from('players')
+      .select('team_id')
+      .ilike('name_ko', `%${safeQ}%`);
+
+    let byPlayerTeam: PostRow[] = [];
+    if (matchedPlayers && matchedPlayers.length > 0) {
+      const teamIds = Array.from(
+        new Set(
+          (matchedPlayers as { team_id: string | null }[])
+            .map((p) => p.team_id)
+            .filter((id): id is string => !!id),
+        ),
+      );
+      if (teamIds.length > 0) {
+        const { data: postsFromTeams } = await supabase
+          .from('community_posts')
+          .select(`
+            *,
+            author:users!user_id (nickname, avatar_url, is_deleted),
+            team:teams (name_ko)
+          `)
+          .in('team_id', teamIds)
+          .eq('is_blinded', false)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        byPlayerTeam = (postsFromTeams ?? []) as unknown as PostRow[];
+      }
+    }
+
+    // Merge + dedupe by id, sort by created_at DESC
+    const seen = new Set<string>();
+    const merged: PostRow[] = [];
+    const combined: PostRow[] = [
+      ...((byText ?? []) as unknown as PostRow[]),
+      ...byPlayerTeam,
+    ];
+    for (const p of combined) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        merged.push(p);
+      }
+    }
+    merged.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+
+    return { data: merged.map(mapCommunityPost), error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Recent searches (D-08 — DB-backed via Phase 1 recent_searches table)
+// ═══════════════════════════════════════════════════════════════
+
+export async function fetchRecentSearches(
+  userId: string,
+): Promise<ApiResult<string[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('recent_searches')
+      .select('query')
+      .eq('user_id', userId)
+      .eq('search_type', 'community')
+      .order('created_at', { ascending: false });
+    if (error) return { data: null, error: error.message };
+    return {
+      data: (data ?? []).map((r: { query: string }) => r.query),
+      error: null,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function addRecentSearch(
+  userId: string,
+  query: string,
+): Promise<ApiResult<void>> {
+  try {
+    const q = query.trim();
+    if (!q) return { data: undefined, error: null };
+
+    // Dedupe: delete any existing row with same user+query+type, then insert
+    // (keeps the new timestamp at the top and lets trg_limit_recent_searches
+    // trim to 10). DB trigger auto-trims per RESEARCH §Architecture Pattern §5.
+    await supabase
+      .from('recent_searches')
+      .delete()
+      .eq('user_id', userId)
+      .eq('search_type', 'community')
+      .eq('query', q);
+
+    const { error } = await supabase
+      .from('recent_searches')
+      .insert({ user_id: userId, query: q, search_type: 'community' });
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function removeRecentSearch(
+  userId: string,
+  query: string,
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase
+      .from('recent_searches')
+      .delete()
+      .eq('user_id', userId)
+      .eq('search_type', 'community')
+      .eq('query', query);
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function clearRecentSearches(userId: string): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase
+      .from('recent_searches')
+      .delete()
+      .eq('user_id', userId)
+      .eq('search_type', 'community');
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ─── Helper: reset slug cache (for testing) ───────────────
+export function resetSlugCache(): void {
+  _slugMap = null;
+  _uuidToSlugMap = null;
 }
