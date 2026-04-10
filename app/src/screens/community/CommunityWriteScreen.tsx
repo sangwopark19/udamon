@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +25,11 @@ import { useCommunity } from '../../contexts/CommunityContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import TeamFilterBar from '../../components/common/TeamFilterBar';
+import { uploadCommunityImages } from '../../services/r2Upload';
+import { supabase } from '../../services/supabase';
 import type { PollDuration } from '../../types/poll';
 import type { RootStackParamList } from '../../types/navigation';
-import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import { colors, fontSize, fontWeight, radius, shadow, spacing } from '../../styles/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ScreenRoute = RouteProp<RootStackParamList, 'CommunityWrite'>;
@@ -69,7 +73,15 @@ export default function CommunityWriteScreen() {
   const [pollAllowMultiple, setPollAllowMultiple] = useState(false);
   const [pollDuration, setPollDuration] = useState<PollDuration>('24h');
 
+  // Submit / upload state (D-09, D-18)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadStep, setUploadStep] = useState<'idle' | 'uploading_images' | 'creating_post'>('idle');
+  const [uploadCurrent, setUploadCurrent] = useState(0);
+  const [uploadTotal, setUploadTotal] = useState(0);
+
   const contentRef = useRef<TextInput>(null);
+  // Stable ref for retry-from-Alert without creating a dependency cycle on handleSubmit
+  const handleSubmitRef = useRef<() => void>(() => {});
 
   const canSubmit =
     title.trim().length > 0 &&
@@ -91,8 +103,56 @@ export default function CommunityWriteScreen() {
     }
   }, [title, content, navigation]);
 
-  const handleSubmit = useCallback(() => {
-    if (!canSubmit) return;
+  // D-09: R2 upload FIRST → then createPost with publicUrls
+  // D-18: Alert + form retention on any failure, no auto-retry
+  const handleSubmit = useCallback(async () => {
+    if (!canSubmit || !user?.id) return;
+    setIsSubmitting(true);
+
+    let publicUrls: string[] = [];
+
+    // Step 1: Upload images to R2 (if any)
+    if (images.length > 0) {
+      setUploadStep('uploading_images');
+      setUploadTotal(images.length);
+      setUploadCurrent(0);
+
+      const sessionResult = await supabase.auth.getSession();
+      const token = sessionResult.data.session?.access_token;
+      if (!token) {
+        setIsSubmitting(false);
+        setUploadStep('idle');
+        Alert.alert(
+          t('community_image_upload_failed_title'),
+          t('community_image_upload_failed_desc'),
+          [
+            { text: t('btn_cancel'), style: 'cancel' },
+            { text: t('btn_retry'), onPress: () => { handleSubmitRef.current(); } },
+          ],
+        );
+        return;
+      }
+
+      const uploadResult = await uploadCommunityImages(user.id, images, token);
+      if (uploadResult.error || !uploadResult.data) {
+        setIsSubmitting(false);
+        setUploadStep('idle');
+        Alert.alert(
+          t('community_image_upload_failed_title'),
+          t('community_image_upload_failed_desc'),
+          [
+            { text: t('btn_cancel'), style: 'cancel' },
+            { text: t('btn_retry'), onPress: () => { handleSubmitRef.current(); } },
+          ],
+        );
+        return;
+      }
+      publicUrls = uploadResult.data;
+      setUploadCurrent(images.length);
+    }
+
+    // Step 2: Create post (+ poll if present)
+    setUploadStep('creating_post');
 
     const pollInput = showPoll
       ? {
@@ -102,19 +162,62 @@ export default function CommunityWriteScreen() {
         }
       : undefined;
 
-    createPost(
+    const created = await createPost(
       {
         team_id: selectedTeamId ?? undefined,
         title: title.trim(),
         content: content.trim(),
-        images,
+        images: publicUrls,
       },
       pollInput,
     );
 
+    if (!created) {
+      // Orphan R2 files per D-09 — log for v2 cleanup
+      if (publicUrls.length > 0) {
+        console.warn('[Community] R2 upload succeeded but DB insert failed — orphan:', publicUrls);
+      }
+      setIsSubmitting(false);
+      setUploadStep('idle');
+      Alert.alert(
+        t('community_post_create_failed_title'),
+        t('community_post_create_failed_desc'),
+        [
+          { text: t('btn_cancel'), style: 'cancel' },
+          { text: t('btn_retry'), onPress: () => { handleSubmitRef.current(); } },
+        ],
+      );
+      return;
+    }
+
+    // Full success
+    setIsSubmitting(false);
+    setUploadStep('idle');
     showToast(t('write_post_success'), 'success');
     navigation.goBack();
-  }, [canSubmit, showPoll, pollAllowMultiple, pollDuration, pollOptions, createPost, selectedTeamId, title, content, images, navigation, showToast]);
+  }, [
+    canSubmit,
+    user?.id,
+    images,
+    showPoll,
+    pollAllowMultiple,
+    pollDuration,
+    pollOptions,
+    createPost,
+    selectedTeamId,
+    title,
+    content,
+    navigation,
+    showToast,
+    t,
+  ]);
+
+  // Keep the retry ref in sync with the latest handleSubmit closure
+  useEffect(() => {
+    handleSubmitRef.current = () => {
+      void handleSubmit();
+    };
+  }, [handleSubmit]);
 
   const handleAddImage = useCallback(async () => {
     if (images.length >= IMAGES_MAX) {
@@ -178,10 +281,10 @@ export default function CommunityWriteScreen() {
           <TouchableOpacity
             onPress={handleSubmit}
             activeOpacity={0.7}
-            disabled={!canSubmit}
+            disabled={!canSubmit || isSubmitting}
             style={styles.headerBtn}
           >
-            <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
+            <Text style={[styles.submitText, (!canSubmit || isSubmitting) && styles.submitTextDisabled]}>
               {t('write_register')}
             </Text>
           </TouchableOpacity>
@@ -352,6 +455,33 @@ export default function CommunityWriteScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Uploading Overlay (D-09) — blocks UI during R2 upload + createPost */}
+      <Modal
+        visible={isSubmitting}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { /* non-dismissable */ }}
+      >
+        <View
+          style={styles.overlayRoot}
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+        >
+          <View style={styles.overlayCard}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.overlayCaption}>{t('community_image_uploading')}</Text>
+            {uploadStep === 'uploading_images' && uploadTotal > 1 && (
+              <Text style={styles.overlayProgress}>
+                {t('community_image_upload_progress', {
+                  current: uploadCurrent,
+                  total: uploadTotal,
+                })}
+              </Text>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -564,5 +694,34 @@ const styles = StyleSheet.create({
     fontSize: fontSize.micro,
     color: colors.primary,
     fontWeight: fontWeight.name,
+  },
+
+  // Uploading overlay (D-09)
+  overlayRoot: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overlayCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.xl,
+    alignItems: 'center',
+    minWidth: 200,
+    ...shadow.elevated,
+  },
+  overlayCaption: {
+    marginTop: spacing.md,
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  overlayProgress: {
+    marginTop: spacing.sm,
+    fontSize: fontSize.meta,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });
