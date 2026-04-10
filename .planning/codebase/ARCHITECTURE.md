@@ -157,9 +157,9 @@ The project is split into two independent front-end applications sharing the sam
 ## Key Abstractions
 
 **`isSupabaseConfigured` Flag:**
-- Purpose: Allows app to run on mock data when env vars are missing
+- Purpose: Fail-closed guard ensuring Supabase credentials are configured
 - Location: `app/src/services/supabase.ts`
-- Pattern: Boolean derived from presence of `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`; used as branch condition in contexts
+- Pattern: Throws Error if either `EXPO_PUBLIC_SUPABASE_URL` or `EXPO_PUBLIC_SUPABASE_KEY` is missing; used as branch condition in contexts
 
 **`ApiResult<T>` Generic:**
 - Purpose: Uniform error-or-data return shape from service layer

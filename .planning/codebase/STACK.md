@@ -101,8 +101,8 @@
 - `app/.env` file present (contents not read)
 - Variables accessed via `process.env.EXPO_PUBLIC_*`:
   - `EXPO_PUBLIC_SUPABASE_URL` - Supabase project URL
-  - `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Supabase anon/public key
-- Client initialised in `app/src/services/supabase.ts` with graceful fallback to dummy values when env vars are absent
+  - `EXPO_PUBLIC_SUPABASE_KEY` - Supabase publishable key
+- Client initialised in `app/src/services/supabase.ts` — throws Error when env vars are absent (fail-closed)
 
 **Environment (Edge Function):**
 - Injected automatically by Supabase runtime:

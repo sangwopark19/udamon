@@ -3,7 +3,6 @@ import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import type { AdminRole } from '../types/admin';
 
@@ -177,7 +176,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const code = qp.get('code') || hp.get('code');
     const accessToken = hp.get('access_token') || qp.get('access_token');
     const refreshToken = hp.get('refresh_token') || qp.get('refresh_token');
-    console.log('[OAuth] code:', code, 'accessToken:', !!accessToken, 'refreshToken:', !!refreshToken);
 
     if (code) {
       const { error } = await supabase.auth.exchangeCodeForSession(code);

@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase } from './supabase';
 import type { Photographer, PhotoPost, Player, TimelineEvent } from '../types/photographer';
 import type { PhotoComment, PgCollection } from '../contexts/PhotographerContext';
 

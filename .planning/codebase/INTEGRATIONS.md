@@ -7,9 +7,9 @@
 **Backend-as-a-Service:**
 - Supabase - Primary backend (database, auth, Edge Functions)
   - SDK/Client: `@supabase/supabase-js` ^2.100.0 (app) / `@supabase/supabase-js@2` via npm: in Deno (Edge Function)
-  - Auth env vars: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  - Auth env vars: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_KEY`
   - Client singleton: `app/src/services/supabase.ts`
-  - Graceful degradation: falls back to dummy URL/key when env vars absent (prevents crash in dev without .env)
+  - Fail-closed: throws Error when env vars absent (requires app/.env to be configured)
 
 **File Storage:**
 - Cloudflare R2 - Media object storage (images and videos)
