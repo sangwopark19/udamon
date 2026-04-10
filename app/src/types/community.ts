@@ -22,6 +22,7 @@ export interface CommunityPostWithAuthor extends CommunityPost {
   user: {
     nickname: string;
     avatar_url: string | null;
+    is_deleted?: boolean;
   };
   team: {
     name_ko: string;
@@ -47,6 +48,7 @@ export interface CommunityCommentWithAuthor extends CommunityComment {
   user: {
     nickname: string;
     avatar_url: string | null;
+    is_deleted?: boolean;
   };
 }
 
