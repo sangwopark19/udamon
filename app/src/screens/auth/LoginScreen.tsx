@@ -23,13 +23,24 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { LoginProvider } from '../../contexts/AuthContext';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import { APPLE_SIGNIN_ENABLED } from '../../constants/config';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const SNS_BUTTONS: { provider: LoginProvider; labelKey: string; icon: string; bg: string; text: string }[] = [
-  { provider: 'google', labelKey: 'login_continue_google', icon: 'logo-google', bg: '#FFFFFF', text: '#1A1A2E' },
-  { provider: 'apple', labelKey: 'login_continue_apple', icon: 'logo-apple', bg: '#000000', text: '#FFFFFF' },
+interface SnsButton {
+  provider: LoginProvider;
+  labelKey: string;
+  icon: string;
+  bg: string;
+  text: string;
+  disabled?: boolean;
+}
+
+const SNS_BUTTONS: SnsButton[] = [
   { provider: 'kakao', labelKey: 'login_continue_kakao', icon: 'chatbubble', bg: '#FEE500', text: '#191919' },
+  { provider: 'naver', labelKey: 'login_continue_naver', icon: 'navigate', bg: '#03C75A', text: '#FFFFFF' },
+  { provider: 'google', labelKey: 'login_continue_google', icon: 'logo-google', bg: '#FFFFFF', text: '#1A1A2E' },
+  { provider: 'apple', labelKey: 'login_continue_apple', icon: 'logo-apple', bg: '#000000', text: '#FFFFFF', disabled: !APPLE_SIGNIN_ENABLED },
 ];
 
 export default function LoginScreen() {
@@ -120,17 +131,19 @@ export default function LoginScreen() {
             {SNS_BUTTONS.map((btn) => (
               <TouchableOpacity
                 key={btn.provider}
-                style={[styles.snsBtn, { backgroundColor: btn.bg }]}
-                activeOpacity={0.8}
+                style={[styles.snsBtn, { backgroundColor: btn.bg }, btn.disabled && styles.snsBtnDisabled]}
+                activeOpacity={btn.disabled ? 1 : 0.8}
                 onPress={() => handleSNSLogin(btn.provider)}
-                disabled={loading}
+                disabled={loading || btn.disabled}
               >
                 <Ionicons
                   name={btn.icon as keyof typeof Ionicons.glyphMap}
                   size={20}
                   color={btn.text}
                 />
-                <Text style={[styles.snsBtnText, { color: btn.text }]}>{t(btn.labelKey)}</Text>
+                <Text style={[styles.snsBtnText, { color: btn.text }]}>
+                  {t(btn.labelKey)}{btn.disabled ? ` ${t('login_preparing')}` : ''}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -285,6 +298,9 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: colors.whiteAlpha10,
+  },
+  snsBtnDisabled: {
+    opacity: 0.4,
   },
   snsBtnText: {
     fontSize: fontSize.cardName,

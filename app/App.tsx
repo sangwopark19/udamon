@@ -1,10 +1,12 @@
 import './src/i18n';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 
@@ -65,6 +67,7 @@ import UploadPostScreen from './src/screens/photographer/UploadPostScreen';
 import StudioScreen from './src/screens/photographer/StudioScreen';
 import CollectionDetailScreen from './src/screens/photographer/CollectionDetailScreen';
 import OnboardingScreen from './src/screens/onboarding/OnboardingScreen';
+import ProfileSetupScreen from './src/screens/onboarding/ProfileSetupScreen';
 import TermsScreen from './src/screens/settings/TermsScreen';
 import PrivacyScreen from './src/screens/settings/PrivacyScreen';
 import BlockedUsersScreen from './src/screens/settings/BlockedUsersScreen';
@@ -161,24 +164,58 @@ function PushHandler() {
 }
 
 function AppNavigator() {
-  const { loading, isAuthenticated, guestMode } = useAuth();
+  const { loading, isAuthenticated, guestMode, signupInProgress, user } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
+  const navigationRef = useNavigationContainerRef<RootStackParamList>();
+  const prevCanBrowseRef = useRef(false);
+
+  // iOS 빌드타임 임베딩(app.json expo-font)과 별개로, 런타임 폰트 로딩도 보장
+  const [fontsLoaded, fontsError] = useFonts({
+    ...Ionicons.font,
+  });
+
+  useEffect(() => {
+    if (fontsError) {
+      console.error('[Font] Failed to load Ionicons:', fontsError);
+    }
+  }, [fontsError]);
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding_complete').then((v) => setOnboardingDone(v === 'true'));
   }, []);
 
-  if (loading || onboardingDone === null) return <SplashScreen />;
+  const canBrowse = (isAuthenticated && !signupInProgress) || guestMode;
+  const needsProfileSetup = isAuthenticated && user && (!user.nickname || user.nickname.startsWith('user_') || !user.my_team_id);
 
-  const canBrowse = isAuthenticated || guestMode;
+  // Navigator key 변경 시 NavigationContainer가 이전 state를 캐싱하여
+  // initialRouteName이 무시되는 문제 해결 — canBrowse 전환 시 직접 resetRoot
+  useEffect(() => {
+    if (canBrowse && !prevCanBrowseRef.current && navigationRef.isReady()) {
+      const route = canBrowse
+        ? (onboardingDone === false ? 'Onboarding' : needsProfileSetup ? 'ProfileSetup' : 'MainTabs')
+        : 'Login';
+      console.log('[AppNavigator] resetRoot →', route); // TODO: remove after stabilization
+      navigationRef.resetRoot({ index: 0, routes: [{ name: route }] });
+    }
+    prevCanBrowseRef.current = canBrowse;
+  }, [canBrowse, onboardingDone, needsProfileSetup]);
+
+  if (loading || onboardingDone === null || (!fontsLoaded && !fontsError)) return <SplashScreen />;
+
+  const getInitialRoute = (): keyof RootStackParamList => {
+    if (!canBrowse) return 'Login';
+    if (!onboardingDone) return 'Onboarding';
+    if (needsProfileSetup) return 'ProfileSetup';
+    return 'MainTabs';
+  };
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       {!isExpoGo && <PushHandler />}
       <StatusBar style="dark" backgroundColor={colors.background} />
       <RootStack.Navigator
         key={canBrowse ? 'main' : 'auth'}
-        initialRouteName={canBrowse && !onboardingDone ? 'Onboarding' : canBrowse ? 'MainTabs' : 'Login'}
+        initialRouteName={getInitialRoute()}
         screenOptions={{ headerShown: false }}
       >
         {canBrowse ? (
@@ -207,6 +244,7 @@ function AppNavigator() {
             <RootStack.Screen name="Studio" component={StudioScreen} />
             <RootStack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
             <RootStack.Screen name="Onboarding" component={OnboardingScreen} />
+            <RootStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
             <RootStack.Screen name="ContactSupport" component={ContactSupportScreen} />
             <RootStack.Screen name="InquiryList" component={InquiryListScreen} />
             <RootStack.Screen name="InquiryDetail" component={InquiryDetailScreen} />

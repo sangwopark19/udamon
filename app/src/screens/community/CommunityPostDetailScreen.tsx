@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useCommunity } from '../../contexts/CommunityContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBlock } from '../../contexts/BlockContext';
 import { useLoginGate } from '../../hooks/useLoginGate';
 import { timeAgo } from '../../utils/time';
 import type { CommunityCommentWithAuthor } from '../../types/community';
@@ -45,6 +46,7 @@ export default function CommunityPostDetailScreen() {
   const currentUserId = user?.id ?? '';
   const requireLogin = useLoginGate();
   const { showToast } = useToast();
+  const { blockUser } = useBlock();
 
   const {
     getPost,
@@ -123,6 +125,21 @@ export default function CommunityPostDetailScreen() {
     ]);
   }, [postId, reportTarget, reportedIds]);
 
+  const handleBlockUser = useCallback((targetUserId: string) => {
+    Alert.alert(
+      t('block_confirm_title'),
+      t('block_confirm_message'),
+      [
+        { text: t('btn_cancel'), style: 'cancel' },
+        {
+          text: t('block_confirm_btn'),
+          style: 'destructive',
+          onPress: () => blockUser(targetUserId),
+        },
+      ],
+    );
+  }, [blockUser, t]);
+
   const handlePostAction = useCallback(() => {
     if (!post) return;
     const isOwner = post.user_id === currentUserId;
@@ -133,10 +150,14 @@ export default function CommunityPostDetailScreen() {
         ]
       : [
           { text: t('btn_report'), style: 'destructive' as const, onPress: handleReportPost },
+          {
+            text: t('block_user_btn'),
+            onPress: () => handleBlockUser(post.user_id),
+          },
           { text: t('btn_cancel'), style: 'cancel' as const },
         ];
     Alert.alert('', '', buttons);
-  }, [post, handleDeletePost, handleReportPost]);
+  }, [post, currentUserId, handleDeletePost, handleReportPost, handleBlockUser, t]);
 
   const handleSubmitComment = useCallback(() => {
     if (!requireLogin()) return;
@@ -222,7 +243,16 @@ export default function CommunityPostDetailScreen() {
           {/* Post Content */}
           <View style={styles.postSection}>
             {/* Author row */}
-            <View style={styles.authorRow}>
+            <TouchableOpacity
+              style={styles.authorRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                if (post.user_id !== currentUserId) {
+                  handleBlockUser(post.user_id);
+                }
+              }}
+              disabled={post.user_id === currentUserId}
+            >
               <View style={styles.avatar}>
                 <Ionicons name="person" size={18} color={colors.textTertiary} />
               </View>
@@ -236,7 +266,7 @@ export default function CommunityPostDetailScreen() {
                   {post.is_edited && <Text style={styles.editedText}>({t('community_comment_edited')})</Text>}
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
 
             {/* Title & Content */}
             <Text style={styles.postTitle}>{post.title}</Text>
@@ -337,6 +367,7 @@ export default function CommunityPostDetailScreen() {
                   onLike={() => handleLikeComment(parent.id)}
                   onReply={() => handleReply(parent.id)}
                   onDelete={() => handleDeleteComment(parent.id)}
+                  onBlock={() => handleBlockUser(parent.user_id)}
                 />
                 {replies.map((reply) => (
                   <View key={reply.id} style={styles.replyIndent}>
@@ -347,6 +378,7 @@ export default function CommunityPostDetailScreen() {
                       onLike={() => handleLikeComment(reply.id)}
                       onReply={() => handleReply(parent.id)}
                       onDelete={() => handleDeleteComment(reply.id)}
+                      onBlock={() => handleBlockUser(reply.user_id)}
                       isReply
                     />
                   </View>
@@ -403,10 +435,11 @@ interface CommentItemProps {
   onLike: () => void;
   onReply: () => void;
   onDelete: () => void;
+  onBlock: () => void;
   isReply?: boolean;
 }
 
-function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, onDelete, isReply }: CommentItemProps) {
+function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, onDelete, onBlock, isReply }: CommentItemProps) {
   const { t } = useTranslation();
   const isOwner = comment.user_id === currentUserId;
 
@@ -450,6 +483,15 @@ function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, 
         {isOwner && (
           <TouchableOpacity style={styles.commentAction} onPress={onDelete} activeOpacity={0.7}>
             <Text style={[styles.commentActionText, { color: colors.error }]}>{t('btn_delete')}</Text>
+          </TouchableOpacity>
+        )}
+        {!isOwner && (
+          <TouchableOpacity
+            style={styles.commentAction}
+            onPress={onBlock}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="ellipsis-horizontal" size={14} color={colors.textTertiary} />
           </TouchableOpacity>
         )}
       </View>
