@@ -488,11 +488,14 @@ export async function deleteCommunityComment(
   commentId: string,
 ): Promise<ApiResult<void>> {
   try {
-    // Soft delete — UPDATE is_deleted = true, clear content.
-    // Mirrors photographerApi.deleteComment soft-delete semantics.
+    // Soft delete — only flip is_deleted = true.
+    // Do NOT set content = '' because community_comments has a
+    // CHECK (char_length(content) >= 1) constraint which would fail
+    // with SQLSTATE 23514. The UI renders the "삭제된 댓글입니다"
+    // placeholder based on is_deleted alone.
     const { error } = await supabase
       .from('community_comments')
-      .update({ is_deleted: true, content: '' })
+      .update({ is_deleted: true })
       .eq('id', commentId);
     if (error) return { data: null, error: error.message };
     return { data: undefined, error: null };
