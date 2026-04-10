@@ -313,3 +313,363 @@ export async function fetchUserCommunityLikes(
     return { data: null, error: msg };
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Mutations — Posts
+// ═══════════════════════════════════════════════════════════════
+
+export async function createCommunityPost(params: {
+  userId: string;
+  teamSlug?: string;
+  title: string;
+  content: string;
+  images: string[];
+  pollInput?: CreatePollInput;
+}): Promise<ApiResult<CommunityPostWithAuthor>> {
+  try {
+    await ensureSlugMaps();
+    const teamUuid = params.teamSlug ? teamSlugToUuid(params.teamSlug) : null;
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from('community_posts')
+      .insert({
+        user_id: params.userId,
+        team_id: teamUuid,
+        title: params.title,
+        content: params.content,
+        images: params.images,
+        has_poll: !!params.pollInput,
+      })
+      .select(`
+        *,
+        author:users!user_id (nickname, avatar_url, is_deleted),
+        team:teams (name_ko)
+      `)
+      .single();
+
+    if (insertErr) return { data: null, error: insertErr.message };
+    if (!inserted) return { data: null, error: 'Insert returned no row' };
+
+    const postRow = inserted as unknown as PostRow;
+
+    // If a poll is attached, create poll + options. Failures log but do not
+    // rollback the post — per D-09 orphan acceptance (v2 cleanup cron TBD).
+    if (params.pollInput) {
+      const { data: poll, error: pollErr } = await supabase
+        .from('community_polls')
+        .insert({
+          post_id: postRow.id,
+          allow_multiple: params.pollInput.allow_multiple,
+          expires_at: getPollExpiresAt(params.pollInput.duration),
+        })
+        .select('*')
+        .single();
+      if (pollErr || !poll) {
+        console.warn('[Community] poll insert failed:', pollErr?.message);
+      } else {
+        const pollId = (poll as { id: string }).id;
+        const optionRows = params.pollInput.options.map((text, i) => ({
+          poll_id: pollId,
+          text,
+          sort_order: i,
+        }));
+        const { error: optErr } = await supabase
+          .from('community_poll_options')
+          .insert(optionRows);
+        if (optErr) {
+          console.warn('[Community] poll options insert failed:', optErr.message);
+        }
+      }
+    }
+
+    return { data: mapCommunityPost(postRow), error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function updateCommunityPost(
+  postId: string,
+  input: {
+    title?: string;
+    content?: string;
+    images?: string[];
+  },
+): Promise<ApiResult<CommunityPostWithAuthor>> {
+  try {
+    await ensureSlugMaps();
+    const payload: Record<string, unknown> = { is_edited: true };
+    if (input.title !== undefined) payload.title = input.title;
+    if (input.content !== undefined) payload.content = input.content;
+    if (input.images !== undefined) payload.images = input.images;
+
+    const { data, error } = await supabase
+      .from('community_posts')
+      .update(payload)
+      .eq('id', postId)
+      .select(`
+        *,
+        author:users!user_id (nickname, avatar_url, is_deleted),
+        team:teams (name_ko)
+      `)
+      .single();
+    if (error) return { data: null, error: error.message };
+    if (!data) return { data: null, error: 'Update returned no row' };
+    return { data: mapCommunityPost(data as unknown as PostRow), error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function deleteCommunityPost(postId: string): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase.from('community_posts').delete().eq('id', postId);
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Mutations — Comments
+// ═══════════════════════════════════════════════════════════════
+
+export async function createCommunityComment(params: {
+  postId: string;
+  userId: string;
+  content: string;
+  parentCommentId?: string;
+}): Promise<ApiResult<CommunityCommentWithAuthor>> {
+  try {
+    const { data, error } = await supabase
+      .from('community_comments')
+      .insert({
+        post_id: params.postId,
+        user_id: params.userId,
+        content: params.content,
+        parent_comment_id: params.parentCommentId ?? null,
+      })
+      .select(`
+        *,
+        author:users!user_id (nickname, avatar_url, is_deleted)
+      `)
+      .single();
+    if (error) return { data: null, error: error.message };
+    if (!data) return { data: null, error: 'Insert returned no row' };
+    return { data: mapCommunityComment(data as unknown as CommentRow), error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function updateCommunityComment(
+  commentId: string,
+  content: string,
+): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase
+      .from('community_comments')
+      .update({ content, is_edited: true })
+      .eq('id', commentId);
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+export async function deleteCommunityComment(
+  commentId: string,
+): Promise<ApiResult<void>> {
+  try {
+    // Soft delete — UPDATE is_deleted = true, clear content.
+    // Mirrors photographerApi.deleteComment soft-delete semantics.
+    const { error } = await supabase
+      .from('community_comments')
+      .update({ is_deleted: true, content: '' })
+      .eq('id', commentId);
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Mutations — Likes
+// ═══════════════════════════════════════════════════════════════
+
+export async function toggleCommunityLike(
+  userId: string,
+  targetType: LikeTargetType,
+  targetId: string,
+): Promise<ApiResult<boolean>> {
+  try {
+    const { data: existing } = await supabase
+      .from('community_likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('target_type', targetType)
+      .eq('target_id', targetId)
+      .maybeSingle();
+
+    if (existing) {
+      const existingRow = existing as { id: string };
+      const { error } = await supabase
+        .from('community_likes')
+        .delete()
+        .eq('id', existingRow.id);
+      if (error) return { data: null, error: error.message };
+      return { data: false, error: null };
+    } else {
+      const { error } = await supabase
+        .from('community_likes')
+        .insert({ user_id: userId, target_type: targetType, target_id: targetId });
+      if (error) {
+        // 23505 = duplicate from race condition — treat as already liked
+        if (error.code === '23505') return { data: true, error: null };
+        return { data: null, error: error.message };
+      }
+      return { data: true, error: null };
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Mutations — Polls (vote)
+// ═══════════════════════════════════════════════════════════════
+
+export async function voteCommunityPoll(params: {
+  pollId: string;
+  optionId: string;
+  userId: string;
+}): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase
+      .from('community_poll_votes')
+      .insert({
+        poll_id: params.pollId,
+        option_id: params.optionId,
+        user_id: params.userId,
+      });
+    if (error) {
+      // P0001 from check_poll_vote trigger:
+      //   - 'Poll is closed or expired' → POLL_EXPIRED
+      //   - 'Already voted (single choice poll)' → POLL_ALREADY_VOTED
+      if (error.code === 'P0001') {
+        if (/closed|expired/i.test(error.message)) {
+          return { data: null, error: 'POLL_EXPIRED' };
+        }
+        if (/already voted/i.test(error.message)) {
+          return { data: null, error: 'POLL_ALREADY_VOTED' };
+        }
+        return { data: null, error: error.message };
+      }
+      // 23505 from UNIQUE(poll_id, option_id, user_id) — duplicate click
+      if (error.code === '23505') {
+        return { data: null, error: 'POLL_ALREADY_VOTED' };
+      }
+      return { data: null, error: error.message };
+    }
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Fetch post with poll (2-query pattern — D-12 revised per Pitfall 6)
+// ═══════════════════════════════════════════════════════════════
+//
+// WHY 2 queries instead of an embedded `my_votes:community_poll_votes!left(...)`?
+// The embedded select returns ALL poll_votes rows for anyone — RLS only applies
+// per-row and the nested embed joins all rows then tries to filter, which leaks
+// other users' votes. The 2-query pattern keeps votes scoped to the current user
+// via explicit `.eq('user_id', currentUserId)`.
+
+export async function fetchPostWithPoll(
+  postId: string,
+  currentUserId: string | null,
+): Promise<
+  ApiResult<{
+    post: CommunityPostWithAuthor;
+    poll: PollWithOptions | null;
+    myVotes: string[];
+  }>
+> {
+  try {
+    await ensureSlugMaps();
+
+    // Query 1: post + poll + options
+    const { data: postRow, error: postErr } = await supabase
+      .from('community_posts')
+      .select(`
+        *,
+        author:users!user_id (nickname, avatar_url, is_deleted),
+        team:teams (name_ko),
+        poll:community_polls (
+          *,
+          options:community_poll_options (*)
+        )
+      `)
+      .eq('id', postId)
+      .maybeSingle();
+
+    if (postErr) return { data: null, error: postErr.message };
+    if (!postRow) return { data: null, error: 'NOT_FOUND' };
+
+    const row = postRow as unknown as PostRow & { poll?: PollRow | null };
+    const poll = row.poll ? mapPoll(row.poll) : null;
+
+    // Query 2: user's votes for this poll (only if logged-in AND poll exists)
+    let myVotes: string[] = [];
+    if (currentUserId && poll) {
+      const { data: votes, error: votesErr } = await supabase
+        .from('community_poll_votes')
+        .select('option_id')
+        .eq('poll_id', poll.id)
+        .eq('user_id', currentUserId);
+      if (!votesErr && votes) {
+        myVotes = votes.map((v: { option_id: string }) => v.option_id);
+      }
+    }
+
+    return {
+      data: {
+        post: mapCommunityPost(row),
+        poll,
+        myVotes,
+      },
+      error: null,
+    };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RPC — increment view count (D-11)
+// ═══════════════════════════════════════════════════════════════
+
+export async function incrementPostView(postId: string): Promise<ApiResult<void>> {
+  try {
+    const { error } = await supabase.rpc('increment_post_view', { post_id: postId });
+    if (error) return { data: null, error: error.message };
+    return { data: undefined, error: null };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return { data: null, error: msg };
+  }
+}
