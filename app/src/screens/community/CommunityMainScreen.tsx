@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import type { CommunityPostWithAuthor, PostSortOrder } from '../../types/communi
 import type { RootStackParamList } from '../../types/navigation';
 import TeamTabBar from '../../components/community/TeamTabBar';
 import CommunityPostCard from '../../components/community/CommunityPostCard';
+import EmptyState from '../../components/common/EmptyState';
 import { colors, fontSize, fontWeight, layout, spacing } from '../../styles/theme';
 import { CommunitySkeleton } from '../../components/common/Skeleton';
 
@@ -46,31 +48,38 @@ export default function CommunityMainScreen() {
     { key: 'comments', label: t(SORT_I18N.comments) },
   ];
   const { user } = useAuth();
-  const { getFilteredPosts, refreshPosts } = useCommunity();
+  const {
+    posts,
+    getFilteredPosts,
+    refreshPosts,
+    loadMorePosts,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    error,
+  } = useCommunity();
   const { unreadCount: notifUnread } = useNotification();
   const requireLogin = useLoginGate();
 
   const [selectedTeamId, setSelectedTeamId] = useState('all');
   const [sortOrder, setSortOrder] = useState<PostSortOrder>('latest');
-  const [page, setPage] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [ready, setReady] = useState(false);
-  useEffect(() => { setReady(true); }, []);
 
-  const posts = getFilteredPosts(selectedTeamId, sortOrder, page);
+  // Filter-sync: setting the filter triggers context re-fetch
+  useEffect(() => {
+    getFilteredPosts(selectedTeamId, sortOrder, 0);
+  }, [selectedTeamId, sortOrder, getFilteredPosts]);
 
   const availableSorts = SORT_OPTIONS;
 
   const handleTeamSelect = useCallback((teamId: string) => {
     setSelectedTeamId(teamId);
-    setPage(0);
-  }, [sortOrder]);
+  }, []);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    refreshPosts();
-    setPage(0);
-    setTimeout(() => setRefreshing(false), 500);
+    await refreshPosts();
+    setRefreshing(false);
   }, [refreshPosts]);
 
   const handlePostPress = useCallback((postId: string) => {
@@ -91,12 +100,40 @@ export default function CommunityMainScreen() {
     <CommunityPostCard post={item} onPress={handlePostPress} />
   ), [handlePostPress]);
 
-  const renderEmpty = useCallback(() => (
-    <View style={styles.empty}>
-      <Ionicons name="chatbubbles-outline" size={40} color={colors.textTertiary} />
-      <Text style={styles.emptyText}>{t('community_empty')}</Text>
-    </View>
-  ), [t]);
+  const renderEmpty = useCallback(() => {
+    if (isLoading) {
+      return <CommunitySkeleton />;
+    }
+    if (error && posts.length === 0) {
+      return (
+        <EmptyState
+          variant="generic"
+          title={t('community_load_error_title')}
+          description={t('community_load_error_desc')}
+          actionLabel={t('btn_retry')}
+          onAction={() => { void refreshPosts(); }}
+        />
+      );
+    }
+    return (
+      <View style={styles.empty}>
+        <Ionicons name="chatbubbles-outline" size={40} color={colors.textTertiary} />
+        <Text style={styles.emptyText}>{t('community_empty')}</Text>
+      </View>
+    );
+  }, [isLoading, error, posts.length, t, refreshPosts]);
+
+  const renderFooter = useCallback(() => {
+    if (!isLoadingMore) return null;
+    return (
+      <View
+        style={styles.footer}
+        accessibilityLabel={t('community_pagination_loading')}
+      >
+        <ActivityIndicator size="small" color={colors.primary} />
+      </View>
+    );
+  }, [isLoadingMore, t]);
 
   const renderHeader = useCallback(() => (
     <>
@@ -119,14 +156,6 @@ export default function CommunityMainScreen() {
       </View>
     </>
   ), [selectedTeamId, sortOrder, availableSorts, handleTeamSelect]);
-
-  if (!ready) {
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <CommunitySkeleton />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -155,6 +184,7 @@ export default function CommunityMainScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
+        ListFooterComponent={renderFooter}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -163,7 +193,11 @@ export default function CommunityMainScreen() {
             colors={[colors.primary]}
           />
         }
-        onEndReached={() => setPage((p) => p + 1)}
+        onEndReached={() => {
+          if (hasMore && !isLoadingMore) {
+            void loadMorePosts();
+          }
+        }}
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: layout.tabBarHeight + 20 }}
@@ -234,6 +268,10 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fontSize.body,
     color: colors.textTertiary,
+  },
+  footer: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
   },
   fab: {
     position: 'absolute',

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,8 @@ import { useCommunity } from '../../contexts/CommunityContext';
 import type { CommunityPostWithAuthor } from '../../types/community';
 import type { RootStackParamList } from '../../types/navigation';
 import CommunityPostCard from '../../components/community/CommunityPostCard';
-import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import EmptyState from '../../components/common/EmptyState';
+import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/theme';
 import { useTranslation } from 'react-i18next';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -36,6 +38,8 @@ export default function CommunitySearchScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<CommunityPostWithAuthor[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
   const handleBack = useCallback(() => navigation.goBack(), [navigation]);
@@ -43,18 +47,34 @@ export default function CommunitySearchScreen() {
   const handleSearch = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
-    await addRecentSearch(q);
-    const hits = await searchPosts(q);
-    setResults(hits);
-    setHasSearched(true);
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      await addRecentSearch(q);
+      const hits = await searchPosts(q);
+      setResults(hits);
+      setHasSearched(true);
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : 'Search failed');
+    } finally {
+      setIsSearching(false);
+    }
   }, [query, searchPosts, addRecentSearch]);
 
   const handleRecentSearch = useCallback(async (q: string) => {
     setQuery(q);
-    await addRecentSearch(q);
-    const hits = await searchPosts(q);
-    setResults(hits);
-    setHasSearched(true);
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      await addRecentSearch(q);
+      const hits = await searchPosts(q);
+      setResults(hits);
+      setHasSearched(true);
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : 'Search failed');
+    } finally {
+      setIsSearching(false);
+    }
   }, [searchPosts, addRecentSearch]);
 
   const handleClear = useCallback(() => {
@@ -110,12 +130,12 @@ export default function CommunitySearchScreen() {
         </View>
       </View>
 
-      {/* Recent Searches (shown when not searched yet) */}
-      {!hasSearched && recentSearches.length > 0 && (
+      {/* Recent Searches (shown when not searched yet and not currently searching) */}
+      {!hasSearched && !isSearching && recentSearches.length > 0 && (
         <View style={styles.recentSection}>
           <View style={styles.recentHeader}>
             <Text style={styles.recentTitle}>{t('search_recent')}</Text>
-            <TouchableOpacity onPress={clearRecentSearches} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => { void clearRecentSearches(); }} activeOpacity={0.7}>
               <Text style={styles.recentClear}>{t('search_clear')}</Text>
             </TouchableOpacity>
           </View>
@@ -123,13 +143,17 @@ export default function CommunitySearchScreen() {
             <View key={q} style={styles.recentItem}>
               <TouchableOpacity
                 style={styles.recentItemLeft}
-                onPress={() => handleRecentSearch(q)}
+                onPress={() => { void handleRecentSearch(q); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="time-outline" size={16} color={colors.textTertiary} />
                 <Text style={styles.recentItemText}>{q}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => removeRecentSearch(q)} activeOpacity={0.7}>
+              <TouchableOpacity
+                onPress={() => { void removeRecentSearch(q); }}
+                activeOpacity={0.7}
+                accessibilityLabel={t('a11y_dismiss_recent_search')}
+              >
                 <Ionicons name="close" size={16} color={colors.textTertiary} />
               </TouchableOpacity>
             </View>
@@ -137,8 +161,26 @@ export default function CommunitySearchScreen() {
         </View>
       )}
 
+      {/* Search in flight */}
+      {isSearching && (
+        <View style={styles.searchingBlock}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      )}
+
+      {/* Search error */}
+      {searchError && !isSearching && (
+        <EmptyState
+          variant="search"
+          title={t('community_load_error_title')}
+          description={t('community_load_error_desc')}
+          actionLabel={t('btn_retry')}
+          onAction={() => { void handleSearch(); }}
+        />
+      )}
+
       {/* Search Results */}
-      {hasSearched && (
+      {hasSearched && !isSearching && !searchError && (
         <FlatList
           data={results}
           renderItem={renderPost}
@@ -235,5 +277,9 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: fontSize.body,
     color: colors.textTertiary,
+  },
+  searchingBlock: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
   },
 });
