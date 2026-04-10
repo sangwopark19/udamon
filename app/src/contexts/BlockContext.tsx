@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
@@ -9,12 +9,16 @@ interface BlockContextValue {
   blockUser: (userId: string) => Promise<void>;
   unblockUser: (userId: string) => Promise<void>;
   isUserBlocked: (userId: string) => boolean;
+  // D-15 cross-context cache invalidation signal — increments on any block/unblock mutation
+  // CommunityContext observes this to trigger a re-fetch so blocked user posts drop out via RLS.
+  blockedUsersVersion: number;
 }
 
 const BlockContext = createContext<BlockContextValue | null>(null);
 
 export function BlockProvider({ children }: { children: ReactNode }) {
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [blockedUsersVersion, setBlockedUsersVersion] = useState(0);
   const { showToast } = useToast();
   const { user } = useAuth();
   const { t } = useTranslation();
@@ -55,11 +59,13 @@ export function BlockProvider({ children }: { children: ReactNode }) {
       // FK 위반 등 DB 에러 시 로컬 상태에만 반영 (mock 데이터 사용자 대응)
       console.warn('[BlockContext] Supabase insert failed, applying locally:', error.message);
       setBlockedUserIds((prev) => new Set(prev).add(blockedId));
+      setBlockedUsersVersion((v) => v + 1);
       showToast(t('block_success'), 'success');
       return;
     }
 
     setBlockedUserIds((prev) => new Set(prev).add(blockedId));
+    setBlockedUsersVersion((v) => v + 1);
     showToast(t('block_success'), 'success');
   }, [user?.id, showToast, t]);
 
@@ -81,6 +87,7 @@ export function BlockProvider({ children }: { children: ReactNode }) {
       next.delete(blockedId);
       return next;
     });
+    setBlockedUsersVersion((v) => v + 1);
     showToast(t('unblock_success'), 'success');
   }, [user?.id, showToast, t]);
 
@@ -88,11 +95,18 @@ export function BlockProvider({ children }: { children: ReactNode }) {
     return blockedUserIds.has(userId);
   }, [blockedUserIds]);
 
-  return (
-    <BlockContext.Provider value={{ blockedUserIds, blockUser, unblockUser, isUserBlocked }}>
-      {children}
-    </BlockContext.Provider>
+  const value = useMemo<BlockContextValue>(
+    () => ({
+      blockedUserIds,
+      blockUser,
+      unblockUser,
+      isUserBlocked,
+      blockedUsersVersion,
+    }),
+    [blockedUserIds, blockUser, unblockUser, isUserBlocked, blockedUsersVersion],
   );
+
+  return <BlockContext.Provider value={value}>{children}</BlockContext.Provider>;
 }
 
 export function useBlock(): BlockContextValue {

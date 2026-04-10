@@ -40,18 +40,20 @@ export default function CommunitySearchScreen() {
 
   const handleBack = useCallback(() => navigation.goBack(), [navigation]);
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback(async () => {
     const q = query.trim();
     if (!q) return;
-    addRecentSearch(q);
-    setResults(searchPosts(q));
+    await addRecentSearch(q);
+    const hits = await searchPosts(q);
+    setResults(hits);
     setHasSearched(true);
   }, [query, searchPosts, addRecentSearch]);
 
-  const handleRecentSearch = useCallback((q: string) => {
+  const handleRecentSearch = useCallback(async (q: string) => {
     setQuery(q);
-    addRecentSearch(q);
-    setResults(searchPosts(q));
+    await addRecentSearch(q);
+    const hits = await searchPosts(q);
+    setResults(hits);
     setHasSearched(true);
   }, [searchPosts, addRecentSearch]);
 
