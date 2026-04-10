@@ -417,6 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Failed to create user profile' };
     }
 
+    setSignupInProgress(false);
     return { success: true };
   };
 
