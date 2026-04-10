@@ -16,6 +16,8 @@ export interface UserProfile {
   email: string | null;
   username: string | null;
   display_name: string | null;
+  nickname: string | null;
+  nickname_changed_at: string | null;
   avatar_url: string | null;
   bio: string | null;
   is_photographer: boolean;
@@ -37,13 +39,15 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   guestMode: boolean;
+  signupInProgress: boolean;
   isPhotographer: boolean;
   photographerId: string | null;
   isAdmin: boolean;
   adminRole: AdminRole | null;
   login: (provider: LoginProvider) => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUpWithEmail: (email: string, password: string, username: string) => Promise<{ success: boolean; error?: string }>;
+  signUpWithEmail: (email: string, password: string, username: string, teamId?: string) => Promise<{ success: boolean; error?: string }>;
+  completeSignup: () => void;
   loginAsGuest: () => void;
   logout: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -52,65 +56,7 @@ interface AuthContextValue extends AuthState {
   resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
 }
 
-const TEST_ACCOUNT_KEY = 'udamon_test_account';
 const PENDING_OAUTH_KEY = 'pending_oauth_provider';
-
-const TEST_ACCOUNTS: Record<string, { password: string; profile: UserProfile; isPhotographer: boolean }> = {
-  'test@udamon.com': {
-    password: 'test1234',
-    profile: {
-      id: 'test-user-001',
-      email: 'test@udamon.com',
-      username: 'tester',
-      display_name: '테스트유저',
-      avatar_url: null,
-      bio: '우다몬 테스트 계정입니다.',
-      is_photographer: false,
-      is_admin: false,
-      admin_role: null,
-      ticket_balance: 100,
-      my_team_id: 'doosan',
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: false,
-  },
-  'test2@udamon.com': {
-    password: 'test1234',
-    profile: {
-      id: 'test-user-002',
-      email: 'test2@udamon.com',
-      username: 'photographer_tester',
-      display_name: '테스트포토그래퍼',
-      avatar_url: null,
-      bio: '포토그래퍼 테스트 계정입니다.',
-      is_photographer: true,
-      is_admin: false,
-      admin_role: null,
-      ticket_balance: 500,
-      my_team_id: 'lg',
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: true,
-  },
-  'admin@udamon.com': {
-    password: 'admin1234',
-    profile: {
-      id: 'admin-001',
-      email: 'admin@udamon.com',
-      username: 'admin',
-      display_name: '관리자',
-      avatar_url: null,
-      bio: '우다몬 관리자 계정입니다.',
-      is_photographer: false,
-      is_admin: true,
-      admin_role: 'super_admin',
-      ticket_balance: 0,
-      my_team_id: null,
-      created_at: new Date().toISOString(),
-    },
-    isPhotographer: false,
-  },
-};
 
 // ─── Helpers ───
 
@@ -129,6 +75,8 @@ const buildProfileFromToken = (authUser: User): UserProfile => {
     email: authUser.email ?? null,
     username: meta.preferred_username ?? meta.user_name ?? null,
     display_name: meta.full_name ?? meta.name ?? null,
+    nickname: meta.preferred_username ?? meta.user_name ?? null,
+    nickname_changed_at: null,
     avatar_url: meta.avatar_url ?? null,
     bio: null,
     is_photographer: false,
@@ -150,12 +98,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [photographerId, setPhotographerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [guestMode, setGuestMode] = useState(false);
+  const [signupInProgress, _setSignupInProgress] = useState(false);
+  const signupInProgressRef = useRef(false);
+  const setSignupInProgress = (v: boolean) => { signupInProgressRef.current = v; _setSignupInProgress(v); };
 
   const isAuthenticated = user !== null;
   const isGuest = !isAuthenticated;
   const pendingOAuthProvider = useRef<LoginProvider | null>(null);
   // extractAndSetSession이 user를 설정한 직후 true → onAuthStateChange가 덮어쓰지 않도록
   const oauthSessionJustSet = useRef(false);
+  // signUpWithEmail/loginWithEmail이 직접 세션을 설정한 직후 → onAuthStateChange 스킵
+  const emailAuthJustSet = useRef(false);
+  // completeSignup 직후 onAuthStateChange가 user를 덮어쓰는 것 방지
+  const signupJustCompleted = useRef(false);
 
   const fetchUserProfile = async (authUser: User): Promise<UserProfile | null> => {
     try {
@@ -275,22 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
-      // 1) Check for persisted test account first
-      try {
-        const savedEmail = await AsyncStorage.getItem(TEST_ACCOUNT_KEY);
-        if (savedEmail && TEST_ACCOUNTS[savedEmail]) {
-          const acct = TEST_ACCOUNTS[savedEmail];
-          setUser(acct.profile);
-          setLoginProvider('email');
-          setIsPhotographer(acct.isPhotographer);
-          setPhotographerId(acct.isPhotographer ? acct.profile.id : null);
-          setGuestMode(false);
-          setLoading(false);
-          return;
-        }
-      } catch { /* AsyncStorage not available, continue */ }
-
-      // 2) Normal Supabase session restore
+      // Supabase session restore
       try {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
@@ -322,6 +262,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('[Auth] onAuthStateChange:', _event, 'signupInProgressRef:', signupInProgressRef.current, 'emailAuthJustSet:', emailAuthJustSet.current, 'oauthSessionJustSet:', oauthSessionJustSet.current);
       setSession(session);
       if (session?.user) {
         // extractAndSetSession이 방금 user를 JWT에서 설정한 경우 스킵
@@ -331,7 +272,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oauthSessionJustSet.current = false;
           return;
         }
+        if (emailAuthJustSet.current) {
+          console.log('[Auth] onAuthStateChange: skipping (email auth just set)');
+          emailAuthJustSet.current = false;
+          return;
+        }
+        // 회원가입 진행 중에는 프로필 덮어쓰기 방지 — signUpWithEmail이 직접 관리
+        if (signupInProgressRef.current) {
+          console.log('[Auth] onAuthStateChange: skipping (signup in progress)');
+          return;
+        }
+        // completeSignup 직후 onAuthStateChange가 stale DB 데이터로 user를 덮어쓰면
+        // needsProfileSetup=true 또는 isAuthenticated=false가 되어 navigator가 'auth'로 돌아감
+        if (signupJustCompleted.current) {
+          console.log('[Auth] onAuthStateChange: skipping (signup just completed)');
+          signupJustCompleted.current = false;
+          return;
+        }
         const profile = await ensureUserProfile(session.user);
+        console.log('[Auth] onAuthStateChange: ensureUserProfile result — nickname:', profile?.nickname, 'team:', profile?.my_team_id, 'isNull:', profile === null);
         setUser(profile);
         if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
       } else {
@@ -397,33 +356,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginWithEmail = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    const testAcct = TEST_ACCOUNTS[email];
-    if (testAcct && password === testAcct.password) {
-      setUser(testAcct.profile);
-      setLoginProvider('email');
-      setIsPhotographer(testAcct.isPhotographer);
-      setPhotographerId(testAcct.isPhotographer ? testAcct.profile.id : null);
-      setGuestMode(false);
-      setLoading(false);
-      await AsyncStorage.setItem(TEST_ACCOUNT_KEY, email).catch(() => {});
-      return { success: true };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { success: false, error: error.message };
+    setLoginProvider('email');
+
+    // 세션과 프로필을 직접 설정 — onAuthStateChange 레이스 방지
+    emailAuthJustSet.current = true;
+    if (data.session) {
+      setSession(data.session);
+      const profile = await ensureUserProfile(data.session.user);
+      if (profile) {
+        setUser(profile);
+        console.log('[Auth] loginWithEmail: user set directly', profile.nickname);
+      }
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { success: false, error: error.message };
-    setLoginProvider('email');
     return { success: true };
   };
 
-  const signUpWithEmail = async (email: string, password: string, username: string): Promise<{ success: boolean; error?: string }> => {
-    const { error } = await supabase.auth.signUp({
+  const signUpWithEmail = async (email: string, password: string, username: string, teamId?: string): Promise<{ success: boolean; error?: string }> => {
+    setSignupInProgress(true);
+    const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { username, display_name: username } },
+      options: { data: { preferred_username: username, user_name: username, name: username, display_name: username } },
     });
-    if (error) return { success: false, error: error.message };
+    if (error) { setSignupInProgress(false); return { success: false, error: error.message }; }
     setLoginProvider('email');
+
+    // 세션과 프로필을 직접 설정 — onAuthStateChange 레이스 방지
+    emailAuthJustSet.current = true;
+
+    let activeSession = data.session;
+
+    // Supabase가 이메일 확인을 요구하면 signUp이 session=null을 반환함.
+    // 개발 환경에서 autoconfirm이 켜져 있으면 바로 로그인 시도로 세션 확보.
+    if (!activeSession) {
+      console.log('[Auth] signUpWithEmail: no session from signUp, trying signInWithPassword fallback');
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+      if (loginError || !loginData.session) {
+        console.warn('[Auth] signUpWithEmail: login fallback failed:', loginError?.message ?? 'no session');
+        setSignupInProgress(false);
+        return { success: false, error: loginError?.message ?? 'Email confirmation required. Please check your email.' };
+      }
+      activeSession = loginData.session;
+    }
+
+    setSession(activeSession);
+    const profile = await ensureUserProfile(activeSession.user);
+    if (profile) {
+      // 회원가입 시 선택한 구단을 DB에 저장 — needsProfileSetup 조건 충족 방지
+      if (teamId) {
+        await supabase.from('users').update({ my_team_id: teamId }).eq('id', profile.id);
+        profile.my_team_id = teamId;
+      }
+      setUser(profile);
+      console.log('[Auth] signUpWithEmail: user set directly', profile.nickname, 'team:', profile.my_team_id);
+    } else {
+      console.error('[Auth] signUpWithEmail: ensureUserProfile returned null');
+      setSignupInProgress(false);
+      return { success: false, error: 'Failed to create user profile' };
+    }
+
     return { success: true };
   };
+
+  const completeSignup = useCallback(() => {
+    console.log('[Auth] completeSignup called — current user:', user?.nickname, 'team:', user?.my_team_id, 'isAuthenticated:', user !== null);
+    // onAuthStateChange가 stale 데이터로 user를 덮어쓰는 것 방지
+    signupJustCompleted.current = true;
+    setSignupInProgress(false);
+    console.log('[Auth] completeSignup done — signupInProgressRef:', signupInProgressRef.current);
+  }, [user]);
 
   const loginAsGuest = () => {
     setGuestMode(true);
@@ -431,7 +434,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await AsyncStorage.removeItem(TEST_ACCOUNT_KEY).catch(() => {});
     await AsyncStorage.removeItem(PENDING_OAUTH_KEY).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
     setUser(null); setSession(null); setLoginProvider(null);
@@ -479,10 +481,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       isAuthenticated, user, session, isGuest, loginProvider, loading,
-      guestMode, isPhotographer, photographerId,
+      guestMode, signupInProgress, isPhotographer, photographerId,
       isAdmin: user?.is_admin ?? false,
       adminRole: user?.admin_role ?? null,
-      login, loginWithEmail, signUpWithEmail, loginAsGuest, logout,
+      login, loginWithEmail, signUpWithEmail, completeSignup, loginAsGuest, logout,
       updateUserProfile, refreshUser, activatePhotographerMode, resetPassword,
     }}>
       {children}

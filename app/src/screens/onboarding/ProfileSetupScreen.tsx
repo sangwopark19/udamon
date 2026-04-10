@@ -48,8 +48,9 @@ export default function ProfileSetupScreen() {
   const { showToast } = useToast();
 
   // ─── State ───
-  const [nickname, setNickname] = useState('');
-  const [nicknameStatus, setNicknameStatus] = useState<NicknameStatus>('idle');
+  const existingNickname = user?.nickname && !user.nickname.startsWith('user_') ? user.nickname : '';
+  const [nickname, setNickname] = useState(existingNickname);
+  const [nicknameStatus, setNicknameStatus] = useState<NicknameStatus>(existingNickname ? 'available' : 'idle');
   const [nicknameError, setNicknameError] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../services/supabase';
 import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
@@ -27,11 +28,16 @@ import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Step = 1 | 2 | 3;
 
+interface DbTeam {
+  id: string;
+  name_ko: string;
+}
+
 export default function SignupScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { signUpWithEmail } = useAuth();
+  const { signUpWithEmail, completeSignup } = useAuth();
 
   // Step
   const [step, setStep] = useState<Step>(1);
@@ -56,9 +62,80 @@ export default function SignupScreen() {
     setAgreeMarketing(next);
   };
 
+  // Step 1 — Email real-time check
+  type CheckStatus = 'idle' | 'checking' | 'available' | 'taken';
+  const [emailStatus, setEmailStatus] = useState<CheckStatus>('idle');
+  const emailDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const checkEmail = useCallback((value: string) => {
+    if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current);
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed.includes('@') || trimmed.length < 5) {
+      setEmailStatus('idle');
+      return;
+    }
+    setEmailStatus('checking');
+    emailDebounceRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', trimmed)
+        .maybeSingle();
+      setEmailStatus(data ? 'taken' : 'available');
+    }, 500);
+  }, []);
+
+  const handleEmailChange = useCallback((value: string) => {
+    setEmail(value);
+    checkEmail(value);
+  }, [checkEmail]);
+
   // Step 2 — Profile
   const [nickname, setNickname] = useState('');
+  const [nicknameStatus, setNicknameStatus] = useState<CheckStatus>('idle');
+  const nicknameDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [dbTeams, setDbTeams] = useState<DbTeam[]>([]);
+
+  // DB에서 팀 목록 로드 (UUID ID 획득)
+  useEffect(() => {
+    supabase
+      .from('teams')
+      .select('id, name_ko')
+      .order('sort_order')
+      .then(({ data }) => { if (data) setDbTeams(data as DbTeam[]); });
+  }, []);
+
+  const checkNickname = useCallback((value: string) => {
+    if (nicknameDebounceRef.current) clearTimeout(nicknameDebounceRef.current);
+    const trimmed = value.trim();
+    if (trimmed.length < 2 || !/^[가-힣a-zA-Z0-9]+$/.test(trimmed)) {
+      setNicknameStatus('idle');
+      return;
+    }
+    setNicknameStatus('checking');
+    nicknameDebounceRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('id')
+        .eq('nickname', trimmed)
+        .maybeSingle();
+      setNicknameStatus(data ? 'taken' : 'available');
+    }, 500);
+  }, []);
+
+  const handleNicknameChange = useCallback((value: string) => {
+    setNickname(value);
+    checkNickname(value);
+  }, [checkNickname]);
+
+  // Cleanup debounce timers
+  useEffect(() => {
+    return () => {
+      if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current);
+      if (nicknameDebounceRef.current) clearTimeout(nicknameDebounceRef.current);
+    };
+  }, []);
 
   // Step 3 — Complete
   const [signupDone, setSignupDone] = useState(false);
@@ -112,6 +189,8 @@ export default function SignupScreen() {
 
   const validateStep1 = (): boolean => {
     if (!email.includes('@')) { setError(t('signup_error_email')); return false; }
+    if (emailStatus === 'taken') { setError(t('signup_error_email_taken')); return false; }
+    if (emailStatus === 'checking') { setError(t('signup_error_email_checking')); return false; }
     if (password.length < 8) { setError(t('signup_error_password')); return false; }
     if (password !== confirmPassword) { setError(t('signup_error_password_mismatch')); return false; }
     if (!agreePrivacy || !agreeTerms) { setError(t('signup_error_consent_required')); return false; }
@@ -119,14 +198,16 @@ export default function SignupScreen() {
   };
 
   const validateStep2 = (): boolean => {
-    if (nickname.length < 2 || nickname.length > 15) {
+    if (nickname.trim().length < 2 || nickname.trim().length > 12) {
       setError(t('signup_error_nickname_length'));
       return false;
     }
-    if (!/^[a-zA-Z0-9가-힣_]+$/.test(nickname)) {
+    if (!/^[가-힣a-zA-Z0-9]+$/.test(nickname.trim())) {
       setError(t('signup_error_nickname_format'));
       return false;
     }
+    if (nicknameStatus === 'taken') { setError(t('signup_error_nickname_taken')); return false; }
+    if (nicknameStatus === 'checking') { setError(t('signup_error_nickname_checking')); return false; }
     return true;
   };
 
@@ -138,14 +219,17 @@ export default function SignupScreen() {
     } else if (step === 2) {
       if (!validateStep2()) return;
       setLoading(true);
-      const result = await signUpWithEmail(email, password, nickname);
-      setLoading(false);
+      const result = await signUpWithEmail(email, password, nickname.trim(), selectedTeamId ?? undefined);
       if (!result.success) {
+        setLoading(false);
         setError(result.error ?? t('signup_error_failed'));
         return;
       }
-      setSignupDone(true);
+      // signupInProgress 플래그가 navigator key 변경을 차단하므로
+      // 컴포넌트가 살아있는 상태에서 step 3 축하 화면으로 전환
+      setLoading(false);
       setStep(3);
+      setSignupDone(true);
     }
   };
 
@@ -156,8 +240,8 @@ export default function SignupScreen() {
   };
 
   const canProceed = () => {
-    if (step === 1) return email.length > 0 && password.length >= 8 && confirmPassword.length > 0 && agreePrivacy && agreeTerms;
-    if (step === 2) return nickname.length >= 2;
+    if (step === 1) return email.length > 0 && emailStatus !== 'taken' && emailStatus !== 'checking' && password.length >= 8 && confirmPassword.length > 0 && agreePrivacy && agreeTerms;
+    if (step === 2) return nickname.trim().length >= 2 && nicknameStatus !== 'taken' && nicknameStatus !== 'checking' && selectedTeamId !== null;
     return false;
   };
 
@@ -202,18 +286,22 @@ export default function SignupScreen() {
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('signup_label_email')}</Text>
-                <View style={styles.inputWrap}>
+                <View style={[styles.inputWrap, emailStatus === 'taken' && styles.inputError, emailStatus === 'available' && styles.inputAvailable]}>
                   <Ionicons name="mail-outline" size={18} color={colors.textTertiary} />
                   <TextInput
                     style={styles.input}
                     placeholder="example@email.com"
                     placeholderTextColor={colors.textTertiary}
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={handleEmailChange}
                     keyboardType="email-address"
                     autoCapitalize="none"
                   />
+                  {emailStatus === 'checking' && <ActivityIndicator size="small" color={colors.textTertiary} />}
+                  {emailStatus === 'available' && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
+                  {emailStatus === 'taken' && <Ionicons name="close-circle" size={18} color={colors.error} />}
                 </View>
+                {emailStatus === 'taken' && <Text style={styles.fieldError}>{t('signup_error_email_taken')}</Text>}
               </View>
 
               <View style={styles.formGroup}>
@@ -339,43 +427,54 @@ export default function SignupScreen() {
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('signup_label_nickname')}</Text>
-                <View style={styles.inputWrap}>
+                <View style={[styles.inputWrap, nicknameStatus === 'taken' && styles.inputError, nicknameStatus === 'available' && styles.inputAvailable]}>
                   <Ionicons name="person-outline" size={18} color={colors.textTertiary} />
                   <TextInput
                     style={styles.input}
                     placeholder={t('signup_nickname_placeholder')}
                     placeholderTextColor={colors.textTertiary}
                     value={nickname}
-                    onChangeText={setNickname}
-                    maxLength={15}
+                    onChangeText={handleNicknameChange}
+                    maxLength={12}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
+                  {nicknameStatus === 'checking' && <ActivityIndicator size="small" color={colors.textTertiary} />}
+                  {nicknameStatus === 'available' && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
+                  {nicknameStatus === 'taken' && <Ionicons name="close-circle" size={18} color={colors.error} />}
                 </View>
+                {nicknameStatus === 'taken' && <Text style={styles.fieldError}>{t('signup_error_nickname_taken')}</Text>}
+                {nicknameStatus === 'available' && <Text style={styles.fieldSuccess}>{t('signup_nickname_available')}</Text>}
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.label}>{t('signup_label_team')}</Text>
                 <View style={styles.teamGrid}>
-                  {KBO_TEAMS.map((team) => {
-                    const isSelected = selectedTeamId === team.id;
+                  {dbTeams.map((dbTeam) => {
+                    const kboMatch = KBO_TEAMS.find((k) => dbTeam.name_ko.includes(k.shortName) || k.nameKo === dbTeam.name_ko);
+                    const teamColor = kboMatch?.color ?? colors.textTertiary;
+                    const teamTextColor = kboMatch?.textColor ?? '#FFFFFF';
+                    const shortName = kboMatch?.shortName ?? dbTeam.name_ko;
+                    const isSelected = selectedTeamId === dbTeam.id;
                     return (
                       <TouchableOpacity
-                        key={team.id}
+                        key={dbTeam.id}
                         activeOpacity={0.7}
-                        onPress={() => setSelectedTeamId(isSelected ? null : team.id)}
+                        onPress={() => setSelectedTeamId(isSelected ? null : dbTeam.id)}
                         style={[
                           styles.teamItem,
                           isSelected
-                            ? { backgroundColor: team.color, borderColor: team.color }
-                            : { backgroundColor: colors.surfaceElevated, borderColor: team.color },
+                            ? { backgroundColor: teamColor, borderColor: teamColor }
+                            : { backgroundColor: colors.surfaceElevated, borderColor: teamColor },
                         ]}
                       >
                         <Text
                           style={[
                             styles.teamName,
-                            { color: isSelected ? team.textColor : team.color },
+                            { color: isSelected ? teamTextColor : teamColor },
                           ]}
                         >
-                          {team.shortName}
+                          {shortName}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -431,7 +530,7 @@ export default function SignupScreen() {
               <TouchableOpacity
                 style={styles.startBtn}
                 activeOpacity={0.8}
-                onPress={() => navigation.goBack()}
+                onPress={() => completeSignup()}
               >
                 <Text style={styles.startBtnText}>{t('signup_start')}</Text>
               </TouchableOpacity>
@@ -572,6 +671,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 12,
   },
+  fieldError: {
+    fontSize: fontSize.micro,
+    color: colors.error,
+    marginTop: 4,
+  },
+  fieldSuccess: {
+    fontSize: fontSize.micro,
+    color: colors.success,
+    marginTop: 4,
+  },
+  inputError: {
+    borderColor: colors.error,
+  },
+  inputAvailable: {
+    borderColor: colors.success,
+  },
 
   // Team Grid
   teamGrid: {
@@ -580,7 +695,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   teamItem: {
-    width: '47%',
+    width: '31%',
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: radius.lg,
