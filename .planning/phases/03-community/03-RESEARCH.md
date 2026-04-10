@@ -1160,22 +1160,25 @@ All claims in this research are marked with `[VERIFIED:]` (direct verification v
 
 **Action item for planner:** Decide whether to add a "Wave 0 verification" task that runs small SQL snippets (or a Postgres dry-run) to verify A1-A5 before downstream waves depend on them. This is low cost (15 min) and eliminates the biggest risks.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **D-12 embedded select vs 2-query tradeoff (Pitfall 6)**
    - What we know: The `my_votes:community_poll_votes!left(option_id)` pattern specified in D-12 will return votes from ALL users, not just the current user, because the `poll_votes_public_read` RLS policy allows public read.
    - What's unclear: Whether CONTEXT D-12 intended this, or whether the planner should propose a 2-query revision.
    - Recommendation: **Propose to user during plan-check phase** — use a 2-query approach (Example 5) and flag the divergence from D-12 explicitly. Alternative: add a SELECT policy on `community_poll_votes` that returns only `auth.uid() = user_id` OR all-row permissive policy (current) + a more restrictive `USING (auth.uid() = user_id)` permissive policy would combine with OR — so the restrictive version alone is blocked.
+   - **RESOLVED:** Plan 03-01 Task 2 implements `fetchPostWithPoll(postId, currentUserId)` using a 2-query pattern (Query 1: post + poll + options via embedded select; Query 2: `community_poll_votes WHERE user_id = currentUserId AND poll_id = ?`). Acceptance criteria forbid any `my_votes:community_poll_votes!left(...)` embed. Documented as deliberate deviation from CONTEXT D-12 in 03-01 `must_haves.truths` and threat model T-03-01-05.
 
 2. **`popular` sort on server side**
    - What we know: Client currently sorts by `(like_count + comment_count) DESC`. There's no computed column in community_posts.
    - What's unclear: Whether to compute this sort server-side in SQL (`ORDER BY like_count + comment_count DESC`), via a view, or leave it client-side after paginated fetch.
    - Recommendation: Sort server-side as `ORDER BY (like_count + comment_count) DESC, created_at DESC` — Postgres handles expression-based ordering natively. Alternatively, create a generated column. Client-side sort after pagination would break the page boundaries.
+   - **RESOLVED:** Plan 03-01 Task 1 `fetchCommunityPostsByTeam` chains `.order('like_count', { ascending: false })`, `.order('comment_count', { ascending: false })`, `.order('created_at', { ascending: false })` for the `popular` sort. Server-side pagination preserved via `.range(from, to)` consistently applied.
 
 3. **Anon read for post authors (A4)**
    - What we know: D-19 keeps `public.users` authenticated-only. D-02 embedded select assumes joined author data.
    - What's unclear: How PostgREST handles embedded select when the joined table has no applicable anon policy — does it return null author, empty object, or error?
    - Recommendation: Run a small test during Wave 0 implementation to verify behavior. The `CommunityPostCard` must degrade gracefully either way.
+   - **RESOLVED:** Plan 03-01 `mapCommunityPost` returns empty-string `nickname` and safe default avatar when `row.author` is `null` or `undefined` (anon PostgREST behavior per Supabase docs: joined row missing → field is `null`, not an error). Plan 03-03 Task 1 `CommunityPostCard` and Task 3 `CommentItem` render `t('deleted_user')` when `post.user.is_deleted === true` OR `!post.user.nickname` — the empty-nickname branch catches the D-19 anon-read case. Wave 0 smoke test confirms the contract before Wave 1 starts.
 
 4. **Context block-user refresh pattern (D-15)**
    - What we know: `BlockContext.blockUser()` must trigger `CommunityContext.refreshPosts()`. But Context providers can't directly call methods on other contexts (no shared parent to pass refs).
@@ -1185,11 +1188,13 @@ All claims in this research are marked with `[VERIFIED:]` (direct verification v
      - (c) Add a `blockedUsersVersion` counter in BlockContext that CommunityContext subscribes to via `useEffect([version])`
      - (d) Explicitly call `refreshPosts()` from the screen that initiates the block (CommunityPostDetailScreen)
    - Recommendation: **(c) `blockedUsersVersion` counter** — simplest, no cross-context calls, no parent changes. BlockContext exposes `version` number that increments on each blockUser/unblockUser. CommunityContext's fetch effect depends on `version`.
+   - **RESOLVED:** Plan 03-02 Task 1 extends `BlockContext.tsx` with `blockedUsersVersion: number` state that increments in `blockUser` and `unblockUser`. `CommunityContext` initial-load effect depends on `[userId, blockedUsersVersion, currentTeam, currentSort]` so any block/unblock triggers a posts refresh transparently. Option (c) selected — no pub/sub, no parent provider changes.
 
 5. **Trending score formula precision**
    - What we know: Current client formula is `like_count * 2 + comment_count * 3 + view_count * 0.1` + freshness boost (CONTEXT "Claude's Discretion").
    - What's unclear: Whether the freshness boost should be applied per-post in SQL (as shown in Example 10) or at ORDER BY time.
    - Recommendation: Apply per-post in the WITH clause as shown. Planner has discretion per CONTEXT.
+   - **RESOLVED:** Plan 03-00 Task 2 Part 4 `update_trending_posts()` implements the Example 10 formula verbatim inside a CTE: `WITH scored AS (SELECT id, (like_count * 2 + comment_count * 3 + view_count * 0.1) * (1 + GREATEST(0, 1 - EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400)) AS score FROM community_posts WHERE created_at >= NOW() - INTERVAL '24 hours')`, then UPDATEs `is_trending = TRUE` for the top 5 rows and `is_trending = FALSE` for the rest. Per-post freshness applied in the CTE, not at ORDER BY time.
 
 ## Environment Availability
 
