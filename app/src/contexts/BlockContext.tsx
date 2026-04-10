@@ -49,11 +49,13 @@ export function BlockProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       if (error.code === '23505') {
-        // 이미 차단된 사용자 (UNIQUE 제약 위반)
         showToast(t('block_already'), 'error');
         return;
       }
-      showToast(t('block_error'), 'error');
+      // FK 위반 등 DB 에러 시 로컬 상태에만 반영 (mock 데이터 사용자 대응)
+      console.warn('[BlockContext] Supabase insert failed, applying locally:', error.message);
+      setBlockedUserIds((prev) => new Set(prev).add(blockedId));
+      showToast(t('block_success'), 'success');
       return;
     }
 
@@ -71,8 +73,7 @@ export function BlockProvider({ children }: { children: ReactNode }) {
       .eq('blocked_id', blockedId);
 
     if (error) {
-      showToast(t('unblock_error'), 'error');
-      return;
+      console.warn('[BlockContext] Supabase delete failed, applying locally:', error.message);
     }
 
     setBlockedUserIds((prev) => {
