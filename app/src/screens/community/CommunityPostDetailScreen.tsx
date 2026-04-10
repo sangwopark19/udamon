@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,8 @@ import { timeAgo } from '../../utils/time';
 import type { CommunityCommentWithAuthor } from '../../types/community';
 import type { RootStackParamList } from '../../types/navigation';
 import { isPollActive } from '../../types/poll';
-import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import { incrementPostView } from '../../services/communityApi';
+import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/theme';
 import { hapticMedium } from '../../utils/haptics';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -52,15 +54,18 @@ export default function CommunityPostDetailScreen() {
     getPost,
     deletePost,
     getComments,
+    loadCommentsForPost,
     createComment,
     deleteComment,
     toggleLike,
     isLiked,
     getPoll,
+    loadPollForPost,
     votePoll,
     votedPolls,
     reportTarget,
     reportedIds,
+    error,
   } = useCommunity();
 
   const post = getPost(postId);
@@ -69,7 +74,47 @@ export default function CommunityPostDetailScreen() {
 
   const [commentText, setCommentText] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const inputRef = useRef<TextInput>(null);
+
+  // D-11: view_count 증가 RPC + D-04: 상세 진입 시 댓글/투표 로드
+  useEffect(() => {
+    if (!postId) return;
+    let cancelled = false;
+
+    const load = async () => {
+      // Fire-and-forget view_count RPC (D-11) — atomic UPDATE, no race
+      void incrementPostView(postId).then(({ error: rpcErr }) => {
+        if (rpcErr) console.warn('[Community] view_count RPC failed:', rpcErr);
+      });
+
+      // Comments load (D-04)
+      try {
+        await loadCommentsForPost(postId);
+      } catch (e) {
+        if (!cancelled) {
+          console.warn('[Community] loadCommentsForPost failed:', e);
+        }
+      }
+
+      // Poll load (D-12) — safe to call; returns silently when post has no poll
+      const currentPost = getPost(postId);
+      if (currentPost?.has_poll) {
+        try {
+          await loadPollForPost(postId);
+        } catch (e) {
+          if (!cancelled) {
+            console.warn('[Community] loadPollForPost failed:', e);
+          }
+        }
+      }
+
+      if (!cancelled) setInitialLoadDone(true);
+    };
+
+    void load();
+    return () => { cancelled = true; };
+  }, [postId, loadCommentsForPost, loadPollForPost, getPost]);
 
   // Build comment tree: top-level + replies grouped
   const commentTree = useMemo(() => {
@@ -90,7 +135,8 @@ export default function CommunityPostDetailScreen() {
     if (!requireLogin()) return;
     if (!post) return;
     hapticMedium();
-    toggleLike('post', post.id);
+    // toggleLike is async + internally optimistic; fire-and-forget from the screen
+    void toggleLike('post', post.id);
   }, [post, toggleLike, requireLogin]);
 
   const handleDeletePost = useCallback(() => {
@@ -99,13 +145,18 @@ export default function CommunityPostDetailScreen() {
       {
         text: t('btn_delete'),
         style: 'destructive',
-        onPress: () => {
-          deletePost(postId);
-          navigation.goBack();
+        onPress: async () => {
+          const ok = await deletePost(postId);
+          if (ok) {
+            showToast(t('toast_post_deleted'), 'success');
+            navigation.goBack();
+          } else {
+            showToast(t('community_post_create_failed_title'), 'error');
+          }
         },
       },
     ]);
-  }, [postId, deletePost, navigation]);
+  }, [postId, deletePost, navigation, showToast, t]);
 
   const handleReportPost = useCallback(() => {
     if (reportedIds.has(postId)) {
@@ -117,13 +168,13 @@ export default function CommunityPostDetailScreen() {
       {
         text: t('btn_report'),
         style: 'destructive',
-        onPress: () => {
-          const ok = reportTarget('post', postId, 'spam');
-          if (!ok) Alert.alert(t('community_report_failed'));
+        onPress: async () => {
+          // reportTarget shows its own toasts (success + error narrowing) inside the context
+          await reportTarget('post', postId, 'spam');
         },
       },
     ]);
-  }, [postId, reportTarget, reportedIds]);
+  }, [postId, reportTarget, reportedIds, t]);
 
   const handleBlockUser = useCallback((targetUserId: string) => {
     Alert.alert(
@@ -159,20 +210,24 @@ export default function CommunityPostDetailScreen() {
     Alert.alert('', '', buttons);
   }, [post, currentUserId, handleDeletePost, handleReportPost, handleBlockUser, t]);
 
-  const handleSubmitComment = useCallback(() => {
+  const handleSubmitComment = useCallback(async () => {
     if (!requireLogin()) return;
     const text = commentText.trim();
     if (!text) return;
 
-    createComment({
+    const created = await createComment({
       post_id: postId,
       parent_comment_id: replyTo ?? undefined,
       content: text,
     });
-    setCommentText('');
-    setReplyTo(null);
-    showToast(t('toast_comment_sent'), 'success');
-  }, [commentText, postId, replyTo, createComment, showToast, t]);
+    if (created) {
+      setCommentText('');
+      setReplyTo(null);
+      showToast(t('toast_comment_sent'), 'success');
+    } else {
+      showToast(t('community_comment_create_failed'), 'error');
+    }
+  }, [commentText, postId, replyTo, createComment, showToast, t, requireLogin]);
 
   const handleReply = useCallback((commentId: string) => {
     setReplyTo(commentId);
@@ -182,22 +237,48 @@ export default function CommunityPostDetailScreen() {
   const handleDeleteComment = useCallback((commentId: string) => {
     Alert.alert(t('community_comment_delete'), t('community_comment_delete_confirm'), [
       { text: t('btn_cancel'), style: 'cancel' },
-      { text: t('btn_delete'), style: 'destructive', onPress: () => deleteComment(commentId) },
+      {
+        text: t('btn_delete'),
+        style: 'destructive',
+        onPress: async () => {
+          const ok = await deleteComment(commentId);
+          if (ok) {
+            showToast(t('toast_comment_deleted'), 'success');
+          }
+        },
+      },
     ]);
-  }, [deleteComment]);
+  }, [deleteComment, showToast, t]);
 
   const handleLikeComment = useCallback((commentId: string) => {
     if (!requireLogin()) return;
     hapticMedium();
-    toggleLike('comment', commentId);
+    void toggleLike('comment', commentId);
   }, [toggleLike, requireLogin]);
 
   const handleVote = useCallback((optionId: string) => {
+    if (!requireLogin()) return;
     if (!poll) return;
-    votePoll(poll.id, optionId);
-  }, [poll, votePoll]);
+    void votePoll(poll.id, optionId);
+  }, [poll, votePoll, requireLogin]);
 
-  // ─── Not found ─────────────────────────────────────────────
+  // ─── Loading (first mount, before post + comments land) ───
+  if (!post && !initialLoadDone) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingBlock}>
+          <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      </View>
+    );
+  }
+
+  // ─── Not found / error retry ─────────────────────────────
   if (!post) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -207,7 +288,18 @@ export default function CommunityPostDetailScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>{t('community_post_not_found')}</Text>
+          <Text style={styles.notFoundText}>
+            {error ? t('community_post_load_error') : t('community_post_not_found')}
+          </Text>
+          {error && (
+            <TouchableOpacity
+              onPress={() => { void loadCommentsForPost(postId); }}
+              style={styles.retryButton}
+              accessibilityLabel={t('a11y_retry_load')}
+            >
+              <Text style={styles.retryButtonText}>{t('btn_retry')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -217,6 +309,14 @@ export default function CommunityPostDetailScreen() {
   const myVotes = poll ? (votedPolls[poll.id] ?? []) : [];
   const hasVoted = myVotes.length > 0;
   const pollActive = poll ? isPollActive(poll) : false;
+  const pollExpired = poll ? !pollActive : false;
+  const winningOptionId = pollExpired && poll && poll.options.length > 0
+    ? poll.options.reduce((best, o) => (o.vote_count > best.vote_count ? o : best), poll.options[0]).id
+    : null;
+
+  // D-03: 탈퇴/anon 작성자 표시 치환
+  const isPostAuthorDeleted = post.user.is_deleted === true || !post.user.nickname;
+  const displayAuthor = isPostAuthorDeleted ? t('deleted_user') : post.user.nickname;
 
   return (
     <KeyboardAvoidingView
@@ -247,17 +347,18 @@ export default function CommunityPostDetailScreen() {
               style={styles.authorRow}
               activeOpacity={0.7}
               onPress={() => {
-                if (post.user_id !== currentUserId) {
+                // D-03: 탈퇴 사용자는 차단 불가 (ghost)
+                if (post.user_id !== currentUserId && !isPostAuthorDeleted) {
                   handleBlockUser(post.user_id);
                 }
               }}
-              disabled={post.user_id === currentUserId}
+              disabled={post.user_id === currentUserId || isPostAuthorDeleted}
             >
               <View style={styles.avatar}>
                 <Ionicons name="person" size={18} color={colors.textTertiary} />
               </View>
               <View style={styles.authorInfo}>
-                <Text style={styles.authorName}>{post.user.nickname}</Text>
+                <Text style={styles.authorName}>{displayAuthor}</Text>
                 <View style={styles.metaRow}>
                   {post.team && (
                     <Text style={styles.teamBadge}>{post.team.name_ko}</Text>
@@ -300,20 +401,37 @@ export default function CommunityPostDetailScreen() {
                 {poll.options.map((opt) => {
                   const pct = poll.total_votes > 0 ? Math.round((opt.vote_count / poll.total_votes) * 100) : 0;
                   const voted = myVotes.includes(opt.id);
-                  const showResults = hasVoted || !pollActive;
+                  const showResults = hasVoted || pollExpired;
+                  // D-13: 만료된 투표는 winner를 primary로 강조
+                  const isWinner = pollExpired && opt.id === winningOptionId;
 
                   return (
                     <TouchableOpacity
                       key={opt.id}
                       style={styles.pollOption}
-                      onPress={() => !showResults && pollActive && handleVote(opt.id)}
-                      activeOpacity={showResults ? 1 : 0.7}
-                      disabled={showResults || !pollActive}
+                      onPress={() => {
+                        if (pollExpired) return;
+                        if (showResults) return;
+                        handleVote(opt.id);
+                      }}
+                      activeOpacity={pollExpired || showResults ? 1 : 0.7}
+                      disabled={pollExpired || showResults}
+                      accessibilityState={{ disabled: pollExpired }}
+                      accessibilityLabel={
+                        pollExpired
+                          ? t('a11y_poll_option_disabled', { label: opt.text })
+                          : opt.text
+                      }
                     >
                       {showResults && (
                         <View style={[styles.pollBar, { width: `${pct}%` }]} />
                       )}
-                      <Text style={[styles.pollOptionText, voted && styles.pollOptionVoted]}>
+                      <Text
+                        style={[
+                          styles.pollOptionText,
+                          (voted || isWinner) && styles.pollOptionVoted,
+                        ]}
+                      >
                         {opt.text}
                       </Text>
                       {showResults && (
@@ -443,6 +561,7 @@ function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, 
   const { t } = useTranslation();
   const isOwner = comment.user_id === currentUserId;
 
+  // D-03: 소프트 삭제된 댓글은 "삭제된 댓글입니다" 우선 (작성자 탈퇴보다 우선)
   if (comment.is_deleted) {
     return (
       <View style={styles.commentItem}>
@@ -451,13 +570,17 @@ function CommentItem({ comment, currentUserId, isLiked: liked, onLike, onReply, 
     );
   }
 
+  // D-03: 살아있는 댓글이지만 작성자가 탈퇴/anon인 경우
+  const commentAuthorDeleted = comment.user.is_deleted === true || !comment.user.nickname;
+  const commentDisplayAuthor = commentAuthorDeleted ? t('deleted_user') : comment.user.nickname;
+
   return (
     <View style={styles.commentItem}>
       <View style={styles.commentHeader}>
         <View style={styles.commentAvatar}>
           <Ionicons name="person" size={14} color={colors.textTertiary} />
         </View>
-        <Text style={styles.commentAuthor}>{comment.user.nickname}</Text>
+        <Text style={styles.commentAuthor}>{commentDisplayAuthor}</Text>
         <Text style={styles.commentTime}>{timeAgo(comment.created_at)}</Text>
         {comment.is_edited && <Text style={styles.commentEdited}>({t('community_comment_edited')})</Text>}
       </View>
@@ -533,6 +656,23 @@ const styles = StyleSheet.create({
   notFoundText: {
     fontSize: fontSize.body,
     color: colors.textTertiary,
+  },
+  loadingBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: radius.round,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: fontSize.meta,
+    fontWeight: fontWeight.name,
   },
 
   // Post section
