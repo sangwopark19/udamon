@@ -273,7 +273,7 @@ export default function CommunityPostDetailScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBtn} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -289,7 +289,7 @@ export default function CommunityPostDetailScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.headerBtn} activeOpacity={0.7}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -302,6 +302,7 @@ export default function CommunityPostDetailScreen() {
               onPress={() => { void loadCommentsForPost(postId); }}
               style={styles.retryButton}
               accessibilityLabel={t('a11y_retry_load')}
+              activeOpacity={0.7}
             >
               <Text style={styles.retryButtonText}>{t('btn_retry')}</Text>
             </TouchableOpacity>
