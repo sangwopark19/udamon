@@ -721,18 +721,23 @@ export async function reportCommunityTarget(params: {
 // Search (D-07: ILIKE + player pivot, sanitized per Pitfall 8)
 // ═══════════════════════════════════════════════════════════════
 //
-// WHY sanitize with replace(/[%,]/g, '')?
+// WHY sanitize with replace(/[%,()]/g, '')?
 // PostgREST `.or('title.ilike.%q%,content.ilike.%q%')` concatenates the
 // query string into a PostgREST filter expression — it is NOT parameterized.
-// Stripping `%` and `,` prevents a malicious query from injecting extra
-// filter clauses. Length cap (50) limits DoS surface.
+// Stripping `%`, `,`, and parens prevents a malicious query from injecting
+// extra filter clauses or breaking PostgREST's `.or(...)` parenthesis grouping.
+// Length cap (50) limits DoS surface.
 
 export async function searchCommunityPosts(
   query: string,
 ): Promise<ApiResult<CommunityPostWithAuthor[]>> {
   try {
-    // Pitfall 8: strip %, comma — .or() is NOT parameterized
-    const safeQ = query.replace(/[%,]/g, '').trim().slice(0, 50);
+    // Pitfall 8: strip %, comma, and parens — .or() is NOT parameterized, and
+    // PostgREST uses parentheses for filter grouping. User queries like
+    // "K-pop (group)" or "coffee (hot)" produce unmatched parens inside the
+    // .or(...) argument and trigger a 400 Bad Request. supabase-js does NOT
+    // auto-escape these characters.
+    const safeQ = query.replace(/[%,()]/g, '').trim().slice(0, 50);
     if (!safeQ) return { data: [], error: null };
 
     await ensureSlugMaps();
