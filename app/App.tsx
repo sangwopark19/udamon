@@ -164,7 +164,7 @@ function PushHandler() {
 }
 
 function AppNavigator() {
-  const { loading, isAuthenticated, guestMode, signupInProgress, user } = useAuth();
+  const { loading, isAuthenticated, guestMode, signupInProgress, profileReady, user } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
   const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const prevCanBrowseRef = useRef(false);
@@ -185,7 +185,7 @@ function AppNavigator() {
   }, []);
 
   const canBrowse = (isAuthenticated && !signupInProgress) || guestMode;
-  const needsProfileSetup = isAuthenticated && user && (!user.nickname || user.nickname.startsWith('user_') || !user.my_team_id);
+  const needsProfileSetup = isAuthenticated && profileReady && user && (!user.nickname || user.nickname.startsWith('user_') || !user.my_team_id);
 
   // Navigator key 변경 시 NavigationContainer가 이전 state를 캐싱하여
   // initialRouteName이 무시되는 문제 해결 — canBrowse 전환 시 직접 resetRoot
@@ -200,7 +200,7 @@ function AppNavigator() {
     prevCanBrowseRef.current = canBrowse;
   }, [canBrowse, onboardingDone, needsProfileSetup]);
 
-  if (loading || onboardingDone === null || (!fontsLoaded && !fontsError)) return <SplashScreen />;
+  if (loading || onboardingDone === null || (!fontsLoaded && !fontsError) || (isAuthenticated && !profileReady)) return <SplashScreen />;
 
   const getInitialRoute = (): keyof RootStackParamList => {
     if (!canBrowse) return 'Login';

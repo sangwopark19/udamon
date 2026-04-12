@@ -40,6 +40,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   guestMode: boolean;
   signupInProgress: boolean;
+  profileReady: boolean;
   isPhotographer: boolean;
   photographerId: string | null;
   isAdmin: boolean;
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [photographerId, setPhotographerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [guestMode, setGuestMode] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [signupInProgress, _setSignupInProgress] = useState(false);
   const signupInProgressRef = useRef(false);
   const setSignupInProgress = (v: boolean) => { signupInProgressRef.current = v; _setSignupInProgress(v); };
@@ -217,7 +219,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(merged);
             if (merged.is_photographer) { setIsPhotographer(true); setPhotographerId(merged.id); }
           }
-        }).catch(() => {});
+          setProfileReady(true);
+        }).catch(() => { setProfileReady(true); });
       }
     } else {
       console.warn('[OAuth] No code or tokens found in URL');
@@ -236,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           const profile = await ensureUserProfile(session.user);
           setUser(profile);
+          setProfileReady(true);
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
         }
       } catch { /* Supabase unreachable */ }
@@ -291,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await ensureUserProfile(session.user);
         console.log('[Auth] onAuthStateChange: ensureUserProfile result — nickname:', profile?.nickname, 'team:', profile?.my_team_id, 'isNull:', profile === null);
         setUser(profile);
+        setProfileReady(true);
         if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
       } else {
         // session null 이벤트(SIGNED_OUT 등)에서 user를 wipe하지 않음.
@@ -366,6 +371,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await ensureUserProfile(data.session.user);
       if (profile) {
         setUser(profile);
+        setProfileReady(true);
         console.log('[Auth] loginWithEmail: user set directly', profile.nickname);
       }
     }
@@ -409,6 +415,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile.my_team_id = teamId;
       }
       setUser(profile);
+      setProfileReady(true);
       console.log('[Auth] signUpWithEmail: user set directly', profile.nickname, 'team:', profile.my_team_id);
     } else {
       console.error('[Auth] signUpWithEmail: ensureUserProfile returned null');
@@ -437,7 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(PENDING_OAUTH_KEY).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
     setUser(null); setSession(null); setLoginProvider(null);
-    setIsPhotographer(false); setPhotographerId(null); setGuestMode(false);
+    setIsPhotographer(false); setPhotographerId(null); setGuestMode(false); setProfileReady(false);
   };
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
@@ -481,7 +488,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       isAuthenticated, user, session, isGuest, loginProvider, loading,
-      guestMode, signupInProgress, isPhotographer, photographerId,
+      guestMode, signupInProgress, profileReady, isPhotographer, photographerId,
       isAdmin: user?.is_admin ?? false,
       adminRole: user?.admin_role ?? null,
       login, loginWithEmail, signUpWithEmail, completeSignup, loginAsGuest, logout,
