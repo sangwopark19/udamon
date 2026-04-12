@@ -154,11 +154,17 @@ export default function ProfileSetupScreen() {
 
     setIsSubmitting(true);
     try {
+      // slug → UUID 변환 (KBO_TEAMS.id는 slug, DB는 UUID FK)
+      let teamUuid = selectedTeamId;
+      if (selectedTeamId) {
+        const { data: team } = await supabase.from('teams').select('id').eq('slug', selectedTeamId).single();
+        if (team) teamUuid = team.id;
+      }
       const { error } = await supabase
         .from('users')
         .update({
           nickname: trimmedNickname,
-          my_team_id: selectedTeamId,
+          my_team_id: teamUuid,
           nickname_changed_at: new Date().toISOString(),
         })
         .eq('id', user.id);

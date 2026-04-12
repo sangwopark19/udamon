@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Database Foundation & Security** - 모든 신규 테이블 생성, RLS 정책 적용, 보안 취약점 제거
 - [x] **Phase 2: Authentication** - OAuth 4종 연동, AuthContext Supabase 전환, 사용자 프로필 시스템
-- [ ] **Phase 3: Community** - 커뮤니티 게시판 전체 Supabase 연동 (CRUD, 검색, 트렌딩)
+- [x] **Phase 3: Community** - 커뮤니티 게시판 전체 Supabase 연동 (CRUD, 검색, 트렌딩, R2 이미지 업로드)
 - [ ] **Phase 4: Photographer** - 포토그래퍼 갤러리 완성 (심사, 영상, 이미지 처리, 등급)
 - [ ] **Phase 5: Admin** - 어드민 웹 20페이지 Supabase 연동 및 배포
 - [ ] **Phase 6: Notifications & Polish** - 인앱/푸시 알림, 에러 모니터링, 최종 마무리
@@ -66,13 +66,15 @@ Plans:
   3. 게시글에 이미지를 최대 10장 첨부할 수 있고, 업로드 후 게시글에서 이미지가 표시된다
   4. 선수명이나 게시글 제목/내용으로 검색하면 관련 결과가 표시되고, 최근 검색어가 저장된다
   5. 트렌딩 탭에서 최근 24시간 내 좋아요+댓글이 많은 게시글이 상위에 노출된다
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
-- [ ] 03-03: TBD
+- [x] 03-00-PLAN.md — Wave 0: 024_community_phase3.sql migration (FK repoint + pg_cron + increment_post_view RPC + update_trending_posts + anon RLS D-19) + phase3-smoke.sql + supabase db push checkpoint
+- [x] 03-01-PLAN.md — Wave 1: communityApi.ts service layer (photographerApi mirror, ApiResult<T>, post/comment/like/poll/report/search/recent_searches CRUD, 2-query poll fetch, error narrowing, search sanitization)
+- [x] 03-02-PLAN.md — Wave 2: CommunityContext.tsx Supabase migration (remove mocks, remove client trending, optimistic likes with rollback, pagination append, BlockContext version counter for D-15 refresh)
+- [x] 03-03-PLAN.md — Wave 3: Screens integration (Main list async pagination + skeleton + error retry, Search async + DB recents, Detail RPC view increment + D-13 expired poll UI, CommunityPostCard D-03 fallback, ko.ts new i18n keys, manual QA checkpoint)
+- [x] 03-04-PLAN.md — Wave 4: CommunityWriteScreen D-09 R2-first upload flow + D-18 Alert retain-form, mockCommunity.ts deletion, R2 infra provisioned (bucket + CORS + secrets + edge function + compat fix), final Phase 3 E2E QA matrix checkpoint approved
 
 ### Phase 4: Photographer
 **Goal**: 팬 포토그래퍼가 사진/영상을 업로드하고, 심사를 받고, 등급에 따라 활동할 수 있는 완성된 갤러리 시스템
@@ -136,7 +138,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 |-------|----------------|--------|-----------|
 | 1. Database Foundation & Security | 3/3 | Complete | 2026-04-06 |
 | 2. Authentication | 5/5 | Complete | 2026-04-10 |
-| 3. Community | 0/3 | Not started | - |
+| 3. Community | 5/5 | Complete | 2026-04-12 |
 | 4. Photographer | 0/3 | Not started | - |
 | 5. Admin | 0/3 | Not started | - |
 | 6. Notifications & Polish | 0/3 | Not started | - |

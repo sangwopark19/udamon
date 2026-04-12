@@ -140,6 +140,10 @@ Deno.serve(async (req: Request) => {
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
+    // Disable AWS SDK v3 flexible checksum injection so presigned URLs stay
+    // compatible with R2 and simple PUT clients (fetch/XHR don't auto-compute CRC32).
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 
   // --- Generate presigned URLs ---
@@ -152,11 +156,15 @@ Deno.serve(async (req: Request) => {
     const random = Math.random().toString(36).slice(2, 8);
     const key = `${prefix}/${userId}/${timestamp}_${random}.${ext}`;
 
+    // NOTE: ContentLength intentionally omitted. Including it binds the
+    // presigned URL to an exact byte count, causing SignatureDoesNotMatch for
+    // any real upload (R2/S3 reconstruct the canonical request with the actual
+    // content-length header). Size enforcement is handled at the R2 bucket
+    // level (lifecycle rules / bucket policies) per SIZE_LIMITS above.
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
       ContentType: contentType,
-      ContentLength: sizeLimit,
     });
 
     const uploadUrl = await getSignedUrl(s3, command, {

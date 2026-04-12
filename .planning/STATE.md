@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: completed
-stopped_at: Phase 02 Authentication complete
-last_updated: "2026-04-10T02:28:45.052Z"
-last_activity: 2026-04-10
+status: Phase 3 shipped; ready for Phase 4 (photographer)
+stopped_at: Phase 3 community verified (PASS-WITH-NOTES) — R2 infra live, all 12 COMM requirements delivered
+last_updated: "2026-04-11T16:45:00.000Z"
+last_activity: "2026-04-12 - Completed quick task 260412-n69: OAuth 기존 사용자 ProfileSetup 오표시 수정 (profileReady flag)"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 3
+  total_plans: 13
+  completed_plans: 13
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** KBO 팬 커뮤니티 + 팬 포토그래퍼 갤러리를 하나의 앱으로 -- 인증부터 어드민까지 실제 동작하는 완성된 앱
-**Current focus:** Phase 02 complete, ready for Phase 03
+**Current focus:** Phase 03 complete — awaiting Phase 04 (photographer) kickoff
 
 ## Current Position
 
-Phase: 02 (authentication) — COMPLETE
-Plan: 5 of 5
-Status: Phase 02 complete
-Last activity: 2026-04-10
+Phase: 03 (community) — COMPLETE (PASS-WITH-NOTES verifier verdict)
+Plan: 5 of 5 complete
+Status: Phase 3 shipped; ready for Phase 4 (photographer)
+Last activity: 2026-04-12 - Completed quick task 260412-n69: OAuth 기존 사용자 ProfileSetup 오표시 수정 (profileReady flag)
 
 Progress: [██████████] 100%
 
@@ -36,9 +36,9 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 8
-- Average duration: ~8 min
-- Total execution time: ~40 min
+- Total plans completed: 13
+- Average duration: ~15 min (including Phase 3 QA + cross-wave fix overhead)
+- Total execution time: ~3h 30m
 
 **By Phase:**
 
@@ -46,11 +46,12 @@ Progress: [██████████] 100%
 |-------|-------|-------|----------|
 | 01-database-foundation-security | 3/3 | - | - |
 | 02-authentication | 5/5 | ~40 min | ~8 min |
+| 03-community | 5/5 | ~2h 30m (incl. R2 infra + cross-wave bug hunt) | ~30 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 02-00(5m), 02-01(8m), 02-02(4m), 02-03(7m), 02-04(12m)
-- Trend: stable
+- Last 5 plans: 03-00(15m), 03-01(20m), 03-02(15m), 03-03(30m+QA), 03-04(85m incl. R2 infra scope)
+- Trend: each plan deeper than the last due to QA-driven root-cause fixes
 
 *Updated after each plan completion*
 
@@ -63,16 +64,19 @@ Recent decisions affecting current work:
 
 - [Roadmap]: public.users 테이블 + DB 스키마를 Phase 1으로 분리, Auth를 Phase 2로 독립
 - [Roadmap]: Phase 4 (Photographer)는 Phase 2 완료 후 Phase 3과 독립적으로 진행 가능
+- [03-04]: get-upload-url Edge Function은 --no-verify-jwt로 배포 (프로젝트가 ES256 asymmetric JWT key로 rotation됐고 platform gateway는 여전히 HS256으로 검증 → user token을 "Invalid JWT"로 거부). 내부에서 supabase.auth.getUser() 로 여전히 사용자 검증
+- [03-04]: R2 presigned URL 생성 시 ContentLength 바인딩 제거 + requestChecksumCalculation/responseChecksumValidation=WHEN_REQUIRED (AWS SDK v3 기본 flexible checksum은 R2 + fetch/XHR 조합에서 SignatureDoesNotMatch 발생)
+- [03-04]: r2.dev public URL (pub-bde2aaf7c59f459d8d907881400a8959.r2.dev) 은 v1 QA + early user traffic용. 도메인 구매 후 custom domain (media.udamonfan.com) 으로 전환 필요
 
 ### Pending Todos
 
-None yet.
+(none)
 
 ### Blockers/Concerns
 
 - Apple Developer DUNS 등록 지연 -- Apple Sign In 및 iOS 배포 블로커 (AUTH-02 영향)
 - Firebase 미설정 -- FCM 푸시 알림 블로커 (NOTF-03, NOTF-04 영향)
-- 도메인 (udamonfan.com) 미구매 -- OAuth 콜백 URL, 어드민 배포 URL, CORS 설정 블로커
+- 도메인 (udamonfan.com) 미구매 -- OAuth 콜백 URL, 어드민 배포 URL, R2 custom domain 블로커 (현재 r2.dev rate-limited로 임시 운영 중)
 
 ### Quick Tasks Completed
 
@@ -89,9 +93,14 @@ None yet.
 | 260408-nuf | iOS 시뮬레이터에서 한글 텍스트가 ?로 표시되는 폰트 렌더링 버그 수정 | 2026-04-08 | 524dae5 | [260408-nuf-ios](./quick/260408-nuf-ios/) |
 | 260408-ooe | iOS 아이콘 폰트 깨짐 및 카카오 로그인 이슈 심층 조사 및 수정 | 2026-04-08 | c698de1 | [260408-ooe-ios](./quick/260408-ooe-ios/) |
 | 260408-p34 | 안드로이드 카카오 로그인 OAuth 콜백 후 메인화면 미진입 버그 수정 | 2026-04-08 | c9f04e1 | [260408-p34-oauth](./quick/260408-p34-oauth/) |
+| 260412-241 | Fix code review issues from PR #3 (hex, activeOpacity, search parens, REVOKE EXECUTE) | 2026-04-11 | 57a4cab | [260412-241-fix-code-review-issues-from-pr-3-hex-act](./quick/260412-241-fix-code-review-issues-from-pr-3-hex-act/) |
+| 260412-n1o | AuthContext AsyncStorage import 누락 수정 (로그아웃 무반응 + TS 에러 6개 해결) | 2026-04-12 | 8652e5a | [260412-n1o-logout-bug](./quick/260412-n1o-logout-bug/) |
+| 260412-n69 | 기존 OAuth 사용자 로그인 시 프로필 설정 화면 오표시 수정 (profileReady 플래그) | 2026-04-12 | 44d07b9 | [260412-n69-social-login-profile-setup-bug](./quick/260412-n69-social-login-profile-setup-bug/) |
+| 260412-ndx | 팀 선택 저장 안됨 수정 — slug↔UUID 변환 (회원가입+마이페이지) | 2026-04-12 | 59be169 | [260412-ndx-team-save-fix](./quick/260412-ndx-team-save-fix/) |
 
 ## Session Continuity
 
-Last session: 2026-04-10
-Stopped at: Phase 02 Authentication complete
-Resume file: None
+Last session: 2026-04-12T00:00:00.000Z
+Stopped at: Phase 3 community verified (PASS-WITH-NOTES) — R2 infra live, all 12 COMM requirements delivered
+Resume file: .planning/phases/03-community/VERIFICATION.md
+Next step: `/gsd-plan-phase 4` (photographer) or `/gsd-discuss-phase 4` depending on whether requirements need more context

@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabase';
 import type { AdminRole } from '../types/admin';
 
@@ -39,6 +40,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   guestMode: boolean;
   signupInProgress: boolean;
+  profileReady: boolean;
   isPhotographer: boolean;
   photographerId: string | null;
   isAdmin: boolean;
@@ -97,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [photographerId, setPhotographerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [guestMode, setGuestMode] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
   const [signupInProgress, _setSignupInProgress] = useState(false);
   const signupInProgressRef = useRef(false);
   const setSignupInProgress = (v: boolean) => { signupInProgressRef.current = v; _setSignupInProgress(v); };
@@ -110,6 +113,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const emailAuthJustSet = useRef(false);
   // completeSignup 직후 onAuthStateChange가 user를 덮어쓰는 것 방지
   const signupJustCompleted = useRef(false);
+  // 팀 slug ↔ UUID 매핑 캐시 (KBO_TEAMS는 slug, DB는 UUID)
+  const teamSlugToUuidRef = useRef<Record<string, string>>({});
+  const teamUuidToSlugRef = useRef<Record<string, string>>({});
+  const teamMapLoaded = useRef(false);
+  const loadTeamMap = async () => {
+    if (teamMapLoaded.current) return;
+    const { data } = await supabase.from('teams').select('id, slug');
+    if (data) {
+      for (const t of data) {
+        teamSlugToUuidRef.current[t.slug] = t.id;
+        teamUuidToSlugRef.current[t.id] = t.slug;
+      }
+      teamMapLoaded.current = true;
+    }
+  };
+  // DB에서 받은 UUID를 slug로 변환 (클라이언트는 항상 slug 사용)
+  const resolveTeamSlug = (profile: UserProfile): UserProfile => {
+    if (profile.my_team_id && teamUuidToSlugRef.current[profile.my_team_id]) {
+      return { ...profile, my_team_id: teamUuidToSlugRef.current[profile.my_team_id] };
+    }
+    return profile;
+  };
 
   const fetchUserProfile = async (authUser: User): Promise<UserProfile | null> => {
     try {
@@ -118,7 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         5000,
       );
       if (error) { console.error('fetchUserProfile error:', error); return null; }
-      return data as UserProfile;
+      const profile = data as UserProfile;
+      return resolveTeamSlug(profile);
     } catch (e) {
       console.warn('[Auth] fetchUserProfile timeout:', e instanceof Error ? e.message : 'unknown');
       return null;
@@ -216,7 +242,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(merged);
             if (merged.is_photographer) { setIsPhotographer(true); setPhotographerId(merged.id); }
           }
-        }).catch(() => {});
+          setProfileReady(true);
+        }).catch(() => { setProfileReady(true); });
       }
     } else {
       console.warn('[OAuth] No code or tokens found in URL');
@@ -228,6 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
+      // 팀 slug ↔ UUID 매핑 로드 (10 rows, 빠름)
+      await loadTeamMap();
       // Supabase session restore
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -235,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           const profile = await ensureUserProfile(session.user);
           setUser(profile);
+          setProfileReady(true);
           if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
         }
       } catch { /* Supabase unreachable */ }
@@ -290,6 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await ensureUserProfile(session.user);
         console.log('[Auth] onAuthStateChange: ensureUserProfile result — nickname:', profile?.nickname, 'team:', profile?.my_team_id, 'isNull:', profile === null);
         setUser(profile);
+        setProfileReady(true);
         if (profile?.is_photographer) { setIsPhotographer(true); setPhotographerId(profile.id); }
       } else {
         // session null 이벤트(SIGNED_OUT 등)에서 user를 wipe하지 않음.
@@ -365,6 +396,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const profile = await ensureUserProfile(data.session.user);
       if (profile) {
         setUser(profile);
+        setProfileReady(true);
         console.log('[Auth] loginWithEmail: user set directly', profile.nickname);
       }
     }
@@ -408,6 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile.my_team_id = teamId;
       }
       setUser(profile);
+      setProfileReady(true);
       console.log('[Auth] signUpWithEmail: user set directly', profile.nickname, 'team:', profile.my_team_id);
     } else {
       console.error('[Auth] signUpWithEmail: ensureUserProfile returned null');
@@ -436,14 +469,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await AsyncStorage.removeItem(PENDING_OAUTH_KEY).catch(() => {});
     await supabase.auth.signOut().catch(() => {});
     setUser(null); setSession(null); setLoginProvider(null);
-    setIsPhotographer(false); setPhotographerId(null); setGuestMode(false);
+    setIsPhotographer(false); setPhotographerId(null); setGuestMode(false); setProfileReady(false);
   };
 
   const updateUserProfile = useCallback(async (updates: Partial<UserProfile>) => {
     if (!user) return;
     const isTestAccount = user.id.startsWith('test-user-');
     if (!isTestAccount) {
-      const { error } = await supabase.from('users').update(updates).eq('id', user.id);
+      // my_team_id가 slug인 경우 UUID로 변환 (DB FK는 teams.id UUID를 참조)
+      const dbUpdates = { ...updates };
+      if (dbUpdates.my_team_id && teamSlugToUuidRef.current[dbUpdates.my_team_id]) {
+        dbUpdates.my_team_id = teamSlugToUuidRef.current[dbUpdates.my_team_id];
+      }
+      const { error } = await supabase.from('users').update(dbUpdates).eq('id', user.id);
       if (error) { console.error('updateUserProfile error:', error); return; }
     }
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
@@ -480,7 +518,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       isAuthenticated, user, session, isGuest, loginProvider, loading,
-      guestMode, signupInProgress, isPhotographer, photographerId,
+      guestMode, signupInProgress, profileReady, isPhotographer, photographerId,
       isAdmin: user?.is_admin ?? false,
       adminRole: user?.admin_role ?? null,
       login, loginWithEmail, signUpWithEmail, completeSignup, loginAsGuest, logout,

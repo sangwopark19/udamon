@@ -118,6 +118,28 @@ export default {
   community_comment_delete_confirm: '이 댓글을 삭제하시겠습니까?',
   community_comment_deleted: '삭제된 댓글입니다',
   community_comment_edited: '수정됨',
+  // Phase 3 Community states (03-UI-SPEC delta)
+  deleted_user: '탈퇴한 사용자',
+  community_load_error_title: '게시글을 불러오지 못했어요',
+  community_load_error_desc: '네트워크를 확인하고 다시 시도해주세요',
+  community_post_load_error: '게시글을 불러올 수 없습니다',
+  community_pagination_loading: '더 많은 글을 불러오는 중...',
+  community_image_uploading: '이미지를 업로드하는 중...',
+  community_image_upload_progress: '이미지 업로드 중 ({{current}}/{{total}})',
+  community_image_upload_failed_title: '이미지 업로드 실패',
+  community_image_upload_failed_desc: '일부 이미지를 업로드하지 못했어요. 다시 시도하시겠습니까?',
+  community_post_create_failed_title: '게시글 작성 실패',
+  community_post_create_failed_desc: '게시글을 등록하지 못했어요. 잠시 후 다시 시도해주세요.',
+  community_comment_create_failed: '댓글을 등록하지 못했어요',
+  community_like_failed: '좋아요 처리에 실패했어요',
+  community_self_report: '자신의 글은 신고할 수 없습니다',
+  community_vote_failed: '투표에 실패했어요',
+  community_vote_expired: '마감된 투표입니다',
+  community_post_load_retry: '다시 시도',
+  community_anon_action_required: '로그인이 필요한 기능입니다',
+  community_post_action_title: '게시글',
+  community_post_action_message: '이 게시글에 대한 작업을 선택하세요',
+  community_comment_delete_failed: '댓글을 삭제하지 못했어요',
 
   // Community Write
   write_title: '글쓰기',
@@ -486,6 +508,13 @@ export default {
   a11y_send: '보내기',
   a11y_write: '글쓰기',
   a11y_community_search: '커뮤니티 검색',
+  // Phase 3 a11y additions (03-UI-SPEC delta)
+  a11y_post_card: '{{title}}, 작성자 {{author}}, 좋아요 {{likes}}, 댓글 {{comments}}',
+  a11y_like_button: '좋아요',
+  a11y_unlike_button: '좋아요 취소',
+  a11y_retry_load: '다시 불러오기',
+  a11y_dismiss_recent_search: '최근 검색어 삭제',
+  a11y_poll_option_disabled: '{{label}} - 투표 마감',
 
   // Home extra
   home_trending_posts: '인기 포스트',
