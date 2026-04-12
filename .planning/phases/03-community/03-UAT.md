@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 03-community
 source: [03-00-SUMMARY.md, 03-01-SUMMARY.md, 03-02-SUMMARY.md, 03-03-SUMMARY.md, 03-04-SUMMARY.md]
 started: 2026-04-12T10:00:00Z
-updated: 2026-04-12T10:15:00Z
+updated: 2026-04-12T10:30:00Z
 ---
 
 ## Current Test
 
-number: 13
-name: Guest Mode Browsing
-expected: |
-  로그아웃하거나 로그인하지 않은 상태로 앱을 사용하세요. 커뮤니티 피드가 로드됩니다 (anon RLS로 읽기 허용). 글쓰기 FAB이나 좋아요 버튼을 탭하면 로그인 게이트 프롬프트가 표시되어야 합니다.
-awaiting: blocked - logout button not responding
+[testing complete]
 
 ## Tests
 
@@ -66,18 +62,16 @@ result: pass
 
 ### 13. Guest Mode Browsing
 expected: Log out or use the app without signing in. The community feed loads (anon RLS allows reading). Tapping the write FAB or like button triggers a login gate prompt instead of performing the action.
-result: blocked
-blocked_by: other
-reason: "로그아웃 버튼을 눌러도 아무 반응이 없어서 게스트 모드 테스트 불가"
+result: pass
 
 ## Summary
 
 total: 13
-passed: 12
+passed: 13
 issues: 0
 pending: 0
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
 
