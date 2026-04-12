@@ -52,6 +52,7 @@ export default function CommunityPostDetailScreen() {
 
   const {
     getPost,
+    loadPostById,
     deletePost,
     getComments,
     loadCommentsForPost,
@@ -78,11 +79,21 @@ export default function CommunityPostDetailScreen() {
   const inputRef = useRef<TextInput>(null);
 
   // D-11: view_count 증가 RPC + D-04: 상세 진입 시 댓글/투표 로드
+  // Review fix: 검색/딥링크에서 진입 시 캐시에 없는 게시글을 개별 로드
   useEffect(() => {
     if (!postId) return;
     let cancelled = false;
 
     const load = async () => {
+      // If post is not in the context cache (e.g. entered from search results
+      // or deep link), fetch it individually and add to cache.
+      let resolvedPost = getPost(postId) ?? null;
+      if (!resolvedPost) {
+        resolvedPost = await loadPostById(postId);
+      }
+
+      if (cancelled) return;
+
       // Fire-and-forget view_count RPC (D-11) — atomic UPDATE, no race
       void incrementPostView(postId).then(({ error: rpcErr }) => {
         if (rpcErr) console.warn('[Community] view_count RPC failed:', rpcErr);
@@ -98,8 +109,7 @@ export default function CommunityPostDetailScreen() {
       }
 
       // Poll load (D-12) — safe to call; returns silently when post has no poll
-      const currentPost = getPost(postId);
-      if (currentPost?.has_poll) {
+      if (resolvedPost?.has_poll) {
         try {
           await loadPollForPost(postId);
         } catch (e) {
@@ -114,7 +124,7 @@ export default function CommunityPostDetailScreen() {
 
     void load();
     return () => { cancelled = true; };
-  }, [postId, loadCommentsForPost, loadPollForPost, getPost]);
+  }, [postId, loadCommentsForPost, loadPollForPost, getPost, loadPostById]);
 
   // Build comment tree: top-level + replies grouped
   const commentTree = useMemo(() => {

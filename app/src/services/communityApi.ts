@@ -488,14 +488,14 @@ export async function deleteCommunityComment(
   commentId: string,
 ): Promise<ApiResult<void>> {
   try {
-    // Soft delete — only flip is_deleted = true.
-    // Do NOT set content = '' because community_comments has a
-    // CHECK (char_length(content) >= 1) constraint which would fail
-    // with SQLSTATE 23514. The UI renders the "삭제된 댓글입니다"
-    // placeholder based on is_deleted alone.
+    // Soft delete — flip is_deleted + replace content with placeholder.
+    // Original content must be scrubbed because community_comments has a
+    // broad anon SELECT policy and direct API callers could read deleted
+    // comment text. We use a placeholder (not '') to satisfy the
+    // CHECK (char_length(content) >= 1) constraint.
     const { error } = await supabase
       .from('community_comments')
-      .update({ is_deleted: true })
+      .update({ is_deleted: true, content: '[deleted]' })
       .eq('id', commentId);
     if (error) return { data: null, error: error.message };
     return { data: undefined, error: null };

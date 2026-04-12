@@ -22,6 +22,7 @@ import type { PollWithOptions, CreatePollInput } from '../types/poll';
 import {
   fetchCommunityPosts,
   fetchTrendingPosts,
+  fetchPostById,
   fetchCommentsByPostId,
   fetchPostWithPoll,
   fetchUserCommunityLikes,
@@ -67,6 +68,7 @@ interface CommunityContextValue {
   searchPosts: (query: string) => Promise<CommunityPostWithAuthor[]>;
   refreshPosts: () => Promise<void>;
   loadMorePosts: () => Promise<void>;
+  loadPostById: (postId: string) => Promise<CommunityPostWithAuthor | null>;
 
   // Comments
   getComments: (postId: string) => CommunityCommentWithAuthor[];
@@ -376,6 +378,21 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       const result = await searchCommunityPosts(query);
       if (result.error || !result.data) return [];
       return result.data;
+    },
+    [],
+  );
+
+  const loadPostById = useCallback(
+    async (postId: string): Promise<CommunityPostWithAuthor | null> => {
+      const result = await fetchPostById(postId);
+      if (result.error || !result.data) return null;
+      const post = result.data;
+      // Add to posts cache so getPost() finds it on subsequent calls
+      setPosts((prev) => {
+        if (prev.some((p) => p.id === post.id)) return prev;
+        return [post, ...prev];
+      });
+      return post;
     },
     [],
   );
@@ -718,6 +735,7 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       searchPosts,
       refreshPosts,
       loadMorePosts,
+      loadPostById,
       getComments,
       loadCommentsForPost,
       createComment,
@@ -752,6 +770,7 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       searchPosts,
       refreshPosts,
       loadMorePosts,
+      loadPostById,
       getComments,
       loadCommentsForPost,
       createComment,
