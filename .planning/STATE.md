@@ -96,6 +96,7 @@ Recent decisions affecting current work:
 | 260412-241 | Fix code review issues from PR #3 (hex, activeOpacity, search parens, REVOKE EXECUTE) | 2026-04-11 | 57a4cab | [260412-241-fix-code-review-issues-from-pr-3-hex-act](./quick/260412-241-fix-code-review-issues-from-pr-3-hex-act/) |
 | 260412-n1o | AuthContext AsyncStorage import 누락 수정 (로그아웃 무반응 + TS 에러 6개 해결) | 2026-04-12 | 8652e5a | [260412-n1o-logout-bug](./quick/260412-n1o-logout-bug/) |
 | 260412-n69 | 기존 OAuth 사용자 로그인 시 프로필 설정 화면 오표시 수정 (profileReady 플래그) | 2026-04-12 | 44d07b9 | [260412-n69-social-login-profile-setup-bug](./quick/260412-n69-social-login-profile-setup-bug/) |
+| 260412-ndx | 팀 선택 저장 안됨 수정 — slug↔UUID 변환 (회원가입+마이페이지) | 2026-04-12 | 59be169 | [260412-ndx-team-save-fix](./quick/260412-ndx-team-save-fix/) |
 
 ## Session Continuity
 
