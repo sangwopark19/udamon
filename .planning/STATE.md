@@ -5,7 +5,7 @@ milestone_name: milestone
 status: Phase 3 shipped; ready for Phase 4 (photographer)
 stopped_at: Phase 3 community verified (PASS-WITH-NOTES) — R2 infra live, all 12 COMM requirements delivered
 last_updated: "2026-04-11T16:45:00.000Z"
-last_activity: "2026-04-12 - Completed quick task 260412-n1o: AuthContext AsyncStorage import fix (logout bug + 6 TS errors)"
+last_activity: "2026-04-12 - Completed quick task 260412-n69: OAuth 기존 사용자 ProfileSetup 오표시 수정 (profileReady flag)"
 progress:
   total_phases: 6
   completed_phases: 3
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 Phase: 03 (community) — COMPLETE (PASS-WITH-NOTES verifier verdict)
 Plan: 5 of 5 complete
 Status: Phase 3 shipped; ready for Phase 4 (photographer)
-Last activity: 2026-04-12 - Completed quick task 260412-n1o: AuthContext AsyncStorage import fix (logout bug + 6 TS errors)
+Last activity: 2026-04-12 - Completed quick task 260412-n69: OAuth 기존 사용자 ProfileSetup 오표시 수정 (profileReady flag)
 
 Progress: [██████████] 100%
 
@@ -95,6 +95,7 @@ Recent decisions affecting current work:
 | 260408-p34 | 안드로이드 카카오 로그인 OAuth 콜백 후 메인화면 미진입 버그 수정 | 2026-04-08 | c9f04e1 | [260408-p34-oauth](./quick/260408-p34-oauth/) |
 | 260412-241 | Fix code review issues from PR #3 (hex, activeOpacity, search parens, REVOKE EXECUTE) | 2026-04-11 | 57a4cab | [260412-241-fix-code-review-issues-from-pr-3-hex-act](./quick/260412-241-fix-code-review-issues-from-pr-3-hex-act/) |
 | 260412-n1o | AuthContext AsyncStorage import 누락 수정 (로그아웃 무반응 + TS 에러 6개 해결) | 2026-04-12 | 8652e5a | [260412-n1o-logout-bug](./quick/260412-n1o-logout-bug/) |
+| 260412-n69 | 기존 OAuth 사용자 로그인 시 프로필 설정 화면 오표시 수정 (profileReady 플래그) | 2026-04-12 | 44d07b9 | [260412-n69-social-login-profile-setup-bug](./quick/260412-n69-social-login-profile-setup-bug/) |
 
 ## Session Continuity
 
