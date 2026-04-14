@@ -85,13 +85,15 @@ Plans:
   2. 포토그래퍼 신청을 제출하면 어드민 심사 대기 상태가 되고, 승인/거절 결과가 반영된다
   3. 영상을 최대 3개 업로드할 수 있고, 앱 내에서 네이티브 재생이 가능하다
   4. 포토그래퍼 프로필에 등급(포스트 수 + 팔로워 기반)이 표시되고, 치어리더 태깅이 동작한다
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
-- [ ] 04-03: TBD
+- [ ] 04-01-PLAN.md — Wave 0: 029~032 마이그레이션 + get-upload-url SIZE_LIMIT 50MB + generate-thumbnails EF (magick-wasm) + pgTAP 5 파일 + expo-video 설치 + [BLOCKING] supabase db push & functions deploy
+- [ ] 04-02-PLAN.md — Wave 1: types 확장 (PhotoPost videos/thumbnail_urls, Photographer grade, Cheerleader DB schema, PhotographerApplication) + photographerApi 신규 4종 (submit/fetchMyApp/fetchCheerleaders/fetchCollectionPosts) + 페이지네이션 + photographerGrade util + r2Upload contentTypes[]
+- [ ] 04-03-PLAN.md — Wave 2: PhotographerContext Supabase 전면 전환 (mock 제거, togglePhotoLike/toggleFollow userId 주입, 컬렉션 await, loadMorePhotoPosts) + mockPhotographers/mockCheerleaders 삭제
+- [ ] 04-04-PLAN.md — Wave 3a: VideoPlayer (expo-video) + GradeBadge + PhotographerCard 통합 + UploadPostScreen 영상 검증/업로드/썸네일 fire-and-forget + i18n 33 keys + bronze 토큰
+- [ ] 04-05-PLAN.md — Wave 3b: StudioScreen state machine (null/pending/approved/rejected) + PhotographerRegisterScreen Step 4 재설계 + PhotographerProfileScreen 헤더 GradeBadge + CollectionDetailScreen async fetch + MainTabNavigator 탭 분기 + [BLOCKING] Manual QA matrix 완주
 
 ### Phase 5: Admin
 **Goal**: 관리자가 어드민 웹에서 사용자, 커뮤니티, 포토그래퍼, 공지사항을 실제 데이터로 관리할 수 있는 상태
@@ -139,6 +141,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Database Foundation & Security | 3/3 | Complete | 2026-04-06 |
 | 2. Authentication | 5/5 | Complete | 2026-04-10 |
 | 3. Community | 5/5 | Complete | 2026-04-12 |
-| 4. Photographer | 0/3 | Not started | - |
+| 4. Photographer | 0/5 | Not started | - |
 | 5. Admin | 0/3 | Not started | - |
 | 6. Notifications & Polish | 0/3 | Not started | - |
