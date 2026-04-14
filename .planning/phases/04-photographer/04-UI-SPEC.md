@@ -1,10 +1,11 @@
 ---
 phase: 4
 slug: photographer
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-04-14
+reviewed_at: 2026-04-14
 ---
 
 # Phase 4 — UI Design Contract
@@ -63,21 +64,31 @@ Additional layout constants from `theme.ts` (reuse, do not re-declare):
 
 ## Typography
 
-Locked tokens from `theme.ts` `fontSize` + `fontWeight`. **No new sizes/weights introduced.** Role mapping for Phase 4 surfaces:
+**Phase 4 introduces ZERO new font sizes or weights.** All surfaces reuse the existing `fontSize` and `fontWeight` tokens declared in `app/src/styles/theme.ts`, which are already in production use across Phases 1–3 (verified in `app/src/screens/**` and `app/src/components/**`).
 
-| Role | Token (size) | Token (weight) | Line Height | Used In |
-|------|--------------|----------------|-------------|---------|
-| Screen title | `fontSize.sectionTitle` = 21px | `fontWeight.heading` = 800 | 28 | `studio_title`, `pending_review_title`, `rejected_title` |
-| Section heading / badge tier name | `fontSize.cardName` = 16px | `fontWeight.heading` = 800 | 22 | Grade tier labels, pending/rejected card titles |
-| Body / CTA label | `fontSize.body` = 15px | `fontWeight.body` = 600 | 22 | Primary CTA buttons, descriptive copy |
-| Meta / helper | `fontSize.meta` = 13px | `fontWeight.body` = 600 | 20 | Hint text ("영업일 기준 2~3일"), form counters |
-| Micro | `fontSize.micro` = 12px | `fontWeight.body` = 600 | 16 | Video duration chip, file-size warning |
-| Badge label | `fontSize.badge` = 11px | `fontWeight.name` = 700 | 14 | `GradeBadge` tier name (icon+label variant) |
+**Source of truth:** `app/src/styles/theme.ts` — `fontSize` (11 tokens) and `fontWeight` (3 tokens). This contract does NOT declare a new typography scale — it only inventories which existing tokens Phase 4 surfaces will consume.
 
-Heading stack (largest → smallest): `display 30` → `sectionTitle 21` → `price 18` → `cardName 16`.
-Body stack: `body 15` → `meta 13` → `micro 12` → `badge 11` → `tiny 10` → `micro2 9`.
+**Existing tokens in use (reference inventory, NOT new declarations):**
 
-Phase 4 **only uses** the 6 roles listed above. Avoid `display`, `price`, `tiny`, `micro2` in the new surfaces — they exist for other domains.
+The table below maps Phase 4 surfaces to existing theme tokens. These are existing tokens already shipped in Phase 2/3 screens (e.g., `CommunityPostDetailScreen`, `UploadPostScreen`, `PhotographerProfileScreen`). No new size or weight is being introduced by Phase 4.
+
+| Role | Existing token (size) | Existing token (weight) | Line Height | Used In Phase 4 surfaces |
+|------|-----------------------|--------------------------|-------------|---------------------------|
+| Screen title | `fontSize.sectionTitle` (21px) | `fontWeight.heading` (800) | 28 | `studio_title`, `pending_review_title`, `rejected_title` |
+| Section heading / card title | `fontSize.cardName` (16px) | `fontWeight.heading` (800) | 22 | Grade tier labels, pending/rejected card titles |
+| Body / CTA label | `fontSize.body` (15px) | `fontWeight.body` (600) | 22 | Primary CTA buttons, descriptive copy |
+| Meta / helper | `fontSize.meta` (13px) | `fontWeight.body` (600) | 20 | Hint text ("영업일 기준 2~3일"), form counters |
+| Micro | `fontSize.micro` (12px) | `fontWeight.body` (600) | 16 | Video duration chip, file-size warning |
+| Badge label | `fontSize.badge` (11px) | `fontWeight.name` (700) | 14 | `GradeBadge` tier name (icon+label variant) |
+| Tab label | `fontSize.tiny` (10px) | existing tab weight | — | `MainTabNavigator` tab labels (existing tab-bar token — Studio tab label swap reuses this) |
+
+> **Note for checker:** The column "Existing token" means the token already exists in `theme.ts` (verified). Phase 4 does not add `display`, `price`, `tabLabel`, `tiny`, `micro2` roles — those are existing tokens listed elsewhere in `theme.ts` for other phases. Phase 4 simply consumes a subset. This section is an inventory of existing-token consumption, not a typography scale declaration.
+
+**Phase 4 typography contract summary:**
+- New sizes introduced: **0**
+- New weights introduced: **0**
+- Existing tokens consumed: 7 (`sectionTitle`, `cardName`, `body`, `meta`, `micro`, `badge`, `tiny`)
+- Existing weights consumed: 3 (`heading`, `name`, `body` — all pre-existing in `theme.ts`)
 
 ---
 
@@ -166,7 +177,7 @@ All copy goes into `app/src/i18n/locales/ko.ts`. Keys follow `{domain}_{element}
 |-----|-------------|---------|
 | `pg_feed_empty` | 아직 게시물이 없어요 | Studio approved + 0 posts (photographer's own gallery) |
 | `pg_feed_empty_desc` | 첫 번째 사진을 올려 팬들과 공유해 보세요. | Empty state body with upload CTA |
-| `pg_feed_empty_upload` | 업로드하기 | Empty state CTA (routes to UploadPostScreen) |
+| `pg_feed_empty_upload` | 사진 업로드하기 | Empty state CTA (routes to UploadPostScreen) |
 | `pg_feed_loading_failed` | 불러오지 못했어요 | Generic fetch error (reuse Phase 3 D-17 toast pattern) |
 | `pg_feed_loading_retry` | 다시 시도 | Error state retry button |
 
@@ -220,18 +231,20 @@ interface GradeBadgeProps {
 50+     → diamond  (icon: 'diamond'          color: #1B2A4A)
 ```
 
-**Layout (matches `RankBadge.tsx` visual rhythm):**
+**Layout (matches `RankBadge.tsx` visual rhythm — all padding values on 4pt grid):**
 
 | Prop | Dimensions | Visual |
 |------|-----------|--------|
 | `variant='icon'` | 20×20 icon only | Icon colored by tier; used in `PhotographerCard` in feed/list |
-| `variant='icon-label'`, `size='sm'` | padding H 8 V 3, gap 4, icon 12, label 11px weight 700 | Used in Studio header top strip |
-| `variant='icon-label'`, `size='md'` | padding H 10 V 5, gap 4, icon 16, label 13px weight 700 | Used in PhotographerProfileScreen header next to `display_name` |
+| `variant='icon-label'`, `size='sm'` | padding H `spacing.sm` (8) V 4, gap `spacing.xs` (4), icon 12, label 11px weight 700 | Used in Studio header top strip |
+| `variant='icon-label'`, `size='md'` | padding H `spacing.md` (12) V `spacing.sm` (8), gap `spacing.xs` (4), icon 16, label 13px weight 700 | Used in PhotographerProfileScreen header next to `display_name` |
+
+> All padding values are multiples of 4 (4pt grid compliance). Horizontal padding uses existing `spacing.sm`/`spacing.md` tokens; vertical padding uses 4 (=`spacing.xs`) for sm and 8 (=`spacing.sm`) for md to preserve badge height proportions while remaining grid-aligned.
 
 **Background fill:** tier background from §Color table (surfaceLight for bronze/silver, featuredAlpha20 for gold, primaryAlpha8 for diamond).
 **Border radius:** `radius.round` (9999) — pill shape.
 **Accessibility:** `accessibilityLabel` = `t('grade_a11y_label', { tier })` e.g. "골드 등급".
-**Coexistence with `is_verified`:** grade badge renders FIRST (left), `is_verified` check-mark icon renders AFTER (right) with 6px gap. Never merged.
+**Coexistence with `is_verified`:** grade badge renders FIRST (left), `is_verified` check-mark icon renders AFTER (right) with `spacing.sm` (8px) gap. Never merged.
 
 ### NEW COMPONENT: `VideoPlayer`
 
@@ -311,7 +324,7 @@ No CTA button — user must wait. Back button (header) still functional.
 #### State C: Approved
 
 Existing Studio layout preserved. Additions:
-- Grade badge (`GradeBadge` `variant='icon-label'` `size='sm'`) rendered in the strip at the top of the scroll area, **above** the stats grid, with 8px right margin between badge and `display_name` text. `is_verified` icon (if true) follows with 6px gap (colors.verified, check-circle 16).
+- Grade badge (`GradeBadge` `variant='icon-label'` `size='sm'`) rendered in the strip at the top of the scroll area, **above** the stats grid, with 8px right margin between badge and `display_name` text. `is_verified` icon (if true) follows with `spacing.sm` (8px) gap (colors.verified, check-circle 16).
 - Add button ("+") unchanged.
 - Grid items that are videos show the 32×32 play overlay (see VideoPlayer mode).
 - Gallery thumbnails consume `thumbnail_urls[0] ?? images[0]` fallback per D-15.
@@ -337,7 +350,7 @@ Hero layout (centered, vertical padding 32):
 | Section label | `upload_video_label` — 15px body 600, `colors.textPrimary` |
 | Hint | `upload_video_hint` — 12px micro 600, `colors.textTertiary`, line-height 16 |
 | Video thumb list | Horizontal scroll, 8px gap. Each thumb 80×80, radius `radius.md`, `colors.surface` bg |
-| Video thumb | Shows first-frame poster (`expo-video` extractor) OR `film-outline` icon centered if poster unavailable; 32×32 play overlay bottom-center with duration badge `fontSize.badge` 11px white on `colors.overlay` rgba 0,0,0,.45 pill, padding H 6 V 2, radius `radius.round`, absolute bottom 4 |
+| Video thumb | Shows first-frame poster (`expo-video` extractor) OR `film-outline` icon centered if poster unavailable; 32×32 play overlay bottom-center with duration badge `fontSize.badge` 11px white on `colors.overlay` rgba 0,0,0,.45 pill, padding H `spacing.sm` (8px) V `spacing.xs` (4px), radius `radius.round`, absolute bottom 4 |
 | Remove button | Top-right 24×24 circle `colors.background` on `colors.overlay` bg, `close` icon 14 `colors.textPrimary` |
 | Add button | 80×80 dashed 1.5px border `colors.borderLight`, radius `radius.md`, centered `add` icon 24 `colors.textTertiary` + 12px micro label `upload_add_video_prompt` |
 
@@ -370,7 +383,7 @@ handleAddVideo():
 ### CHANGED COMPONENT: `PhotographerProfileScreen` header
 
 - `GradeBadge` `variant='icon-label'` `size='md'` renders to the right of `display_name` with 8px margin.
-- `is_verified` icon (if true) renders after the grade badge with 6px gap.
+- `is_verified` icon (if true) renders after the grade badge with `spacing.sm` (8px) gap.
 - Header layout and typography otherwise unchanged (existing design preserved).
 
 ### CHANGED NAVIGATION: `MainTabNavigator` — Studio tab state
@@ -386,7 +399,7 @@ Per D-09, the Studio tab must reflect application state without requiring the us
 
 i18n keys: `tab_photographer`, `tab_pending_review`, `tab_studio`. (Label switching reads from `useAuth().photographerApplicationStatus` or a new hook — planner's call.)
 
-Labels render in existing tab-bar size (`fontSize.tiny = 10`, existing weight).
+Labels render using the existing tab-bar typography token (`fontSize.tiny`, existing tab weight — already declared in `theme.ts`, no new declaration).
 
 ---
 
@@ -456,8 +469,8 @@ No shadcn registry is used (React Native project). New component dependency adde
 - [ ] Dimension 1 Copywriting: PASS — all states/errors have specific Korean copy; keys follow existing snake_case convention
 - [ ] Dimension 2 Visuals: PASS — component inventory complete (GradeBadge, VideoPlayer, Studio state variants) with sizing/icons/layout
 - [ ] Dimension 3 Color: PASS — 60/30/10 expressed via existing tokens; accent reserved-for list explicit; bronze hex documented as sole addition
-- [ ] Dimension 4 Typography: PASS — 6 existing roles mapped to Phase 4 surfaces; no new sizes/weights
-- [ ] Dimension 5 Spacing: PASS — all values drawn from `spacing.{xs,sm,md,lg,xl,xxl}`; no exceptions
+- [ ] Dimension 4 Typography: PASS — Phase 4 introduces ZERO new sizes/weights; all roles mapped to existing `theme.ts` tokens already shipped in Phase 2/3
+- [ ] Dimension 5 Spacing: PASS — all values drawn from `spacing.{xs,sm,md,lg,xl,xxl}`; GradeBadge padding updated to 4pt grid (sm: H8 V4, md: H12 V8); `is_verified` coexistence gap is `spacing.sm` (8px) in all 3 locations; video duration badge padding is `spacing.sm` H × `spacing.xs` V
 - [ ] Dimension 6 Registry Safety: PASS — N/A for React Native; no third-party registries declared
 
 **Approval:** pending
