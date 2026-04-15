@@ -1,9 +1,9 @@
 ---
-status: partial
+status: diagnosed
 phase: 04-photographer
 source: 04-01-SUMMARY.md, 04-02-SUMMARY.md, 04-03-SUMMARY.md, 04-04-SUMMARY.md, 04-05-SUMMARY.md, 04-06-SUMMARY.md
 started: 2026-04-15T06:02:29Z
-updated: 2026-04-15T06:08:00Z
+updated: 2026-04-15T06:12:00Z
 ---
 
 ## Current Test
@@ -172,6 +172,24 @@ blocked: 23
   reason: "User reported: npx expo start 후 안드 시뮬에서 앱 크래시 — [runtime not ready]: Error: Cannot find native module 'ExpoVideo', requireNativeModule@... (전체 native stack trace). Expo Go 또는 구 dev build 에서 expo-video 3.0.16 native module 을 찾을 수 없음. Plan 01 에서 expo-video 를 app.json plugins 에 추가했으나 native rebuild (EAS dev build) 가 필요함."
   severity: blocker
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "순수 native rebuild 누락 — 코드/설정 변경 불필요. Expo managed workflow (CNG) 이므로 신규 native 의존성(expo-video 3.0.16) 추가 시 EAS dev build 재생성 + 시뮬레이터 재설치 필수. 사용자는 Plan 01 이전 빌드된 구 dev client 또는 Expo Go(expo-video 미번들) 로 실행 중 → App.tsx 부팅 시 UploadPostScreen → VideoPlayer → expo-video import 체인이 즉시 평가되어 requireNativeModule('ExpoVideo') throw → [runtime not ready] RED screen. 코드 5개 검증 모두 정상: package.json expo-video ~3.0.16, app.json plugins 등록, VideoPlayer.tsx 올바른 import/API, UploadPostScreen 호출, eas.json development 프로파일. app/ios, app/android 디렉토리 부재로 managed workflow 확정."
+  artifacts:
+    - path: "app/package.json"
+      issue: "정상 — expo-video ~3.0.16 (SDK 54 호환). 변경 불필요."
+    - path: "app/app.json"
+      issue: "정상 — plugins 배열에 expo-video 등록됨. 변경 불필요."
+    - path: "app/src/components/common/VideoPlayer.tsx"
+      issue: "정상 — useVideoPlayer + VideoView import 올바름. 변경 불필요."
+    - path: "app/eas.json"
+      issue: "정상 — development 프로파일 그대로 사용 가능. 변경 불필요."
+    - path: ".planning/phases/04-photographer/04-HUMAN-UAT.md"
+      issue: "사전 준비 체크리스트 보강 권장 (선택) — 'EAS dev build 재생성 필수' 한 줄 추가하면 향후 재발 방지."
+    - path: "docs/phase4-qa-matrix.md"
+      issue: "사전 준비 체크리스트 보강 권장 (선택)."
+  missing:
+    - "EAS dev build 재생성 — `cd app && eas build --profile development --platform android` (+ iOS 병행, ~15~30분)"
+    - "빌드 완료 → `eas build:run --platform android` 또는 dashboard 에서 APK 받아 시뮬레이터 install"
+    - "`npx expo start --dev-client` 로 새 dev client 에 연결 → 정상 부팅 검증 후 UAT Test 1 재실행"
+    - "(선택) 04-HUMAN-UAT.md / docs/phase4-qa-matrix.md 상단에 사전 준비 체크리스트 추가"
+  debug_session: ".planning/debug/expo-video-native-missing.md"
   debug_session: "pending — 사용자가 /gsd-debug 로 진행 예정"
