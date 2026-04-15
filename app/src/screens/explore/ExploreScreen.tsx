@@ -26,7 +26,6 @@ import type { PhotoPost } from '../../types/photographer';
 import type { RootStackParamList, MainTabParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius, layout, shadow, spacing } from '../../styles/theme';
 import { ExploreSkeleton } from '../../components/common/Skeleton';
-import { MOCK_CHEERLEADERS } from '../../data/mockCheerleaders';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,7 +49,7 @@ export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<MainTabParamList, 'Explore'>>();
   const { user } = useAuth();
-  const { photoPosts, players } = usePhotographer();
+  const { photoPosts, players, cheerleaders } = usePhotographer();
   const { unreadCount: notifUnread } = useNotification();
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
@@ -307,7 +306,7 @@ export default function ExploreScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.cheerScroll}
           >
-            {MOCK_CHEERLEADERS.map((cl) => {
+            {cheerleaders.map((cl) => {
               const team = KBO_TEAMS.find((t) => t.id === cl.team_id);
               return (
                 <TouchableOpacity
@@ -317,8 +316,7 @@ export default function ExploreScreen() {
                   onPress={() => navigation.navigate('CheerleaderProfile', { cheerleaderId: cl.id })}
                 >
                   <View style={styles.cheerInfo}>
-                    <Text style={styles.cheerName} numberOfLines={1}>{cl.name}</Text>
-                    <Text style={styles.cheerDesc} numberOfLines={1}>{cl.description}</Text>
+                    <Text style={styles.cheerName} numberOfLines={1}>{cl.name_ko}</Text>
                     {team && (
                       <View style={[styles.cheerTeamBadge, { borderColor: team.color }]}>
                         <Text style={[styles.cheerTeamText, { color: team.color }]}>{team.shortName}</Text>
