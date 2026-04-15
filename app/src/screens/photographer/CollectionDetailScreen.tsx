@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Image,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,9 @@ import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { usePhotographer } from '../../contexts/PhotographerContext';
+import EmptyState from '../../components/common/EmptyState';
 import type { RootStackParamList } from '../../types/navigation';
+import type { PhotoPost } from '../../types/photographer';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -34,19 +37,34 @@ export default function CollectionDetailScreen() {
   const route = useRoute<Route>();
   const { collectionId } = route.params;
 
-  const { collections, getPhotoPost } = usePhotographer();
+  const { collections, getCollectionPosts } = usePhotographer();
 
   const collection = useMemo(
     () => collections.find((c) => c.id === collectionId),
     [collections, collectionId],
   );
 
-  const posts = useMemo(() => {
-    if (!collection) return [];
-    return collection.postIds
-      .map((pid) => getPhotoPost(pid))
-      .filter(Boolean) as NonNullable<ReturnType<typeof getPhotoPost>>[];
-  }, [collection, getPhotoPost]);
+  const [posts, setPosts] = useState<PhotoPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await getCollectionPosts(collectionId);
+      setPosts(result);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to load';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [collectionId, getCollectionPosts]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (!collection) {
     return (
@@ -83,7 +101,19 @@ export default function CollectionDetailScreen() {
       </View>
 
       {/* Grid */}
-      {posts.length === 0 ? (
+      {loading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : error ? (
+        <EmptyState
+          variant="generic"
+          title={t('pg_feed_loading_failed')}
+          description={error}
+          actionLabel={t('pg_feed_loading_retry')}
+          onAction={load}
+        />
+      ) : posts.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="images-outline" size={40} color={colors.textTertiary} />
           <Text style={styles.emptyText}>{t('pg_collection_empty')}</Text>
@@ -96,15 +126,24 @@ export default function CollectionDetailScreen() {
           contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) }}
           columnWrapperStyle={{ gap: GRID_GAP }}
           ItemSeparatorComponent={() => <View style={{ height: GRID_GAP }} />}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.gridItem}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-            >
-              <Image source={{ uri: item.images[0] }} style={styles.gridImage} />
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            const previewUrl = item.thumbnail_urls?.[0] ?? item.images[0];
+            const hasVideo = (item.videos?.length ?? 0) > 0;
+            return (
+              <TouchableOpacity
+                style={styles.gridItem}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
+              >
+                <Image source={{ uri: previewUrl }} style={styles.gridImage} />
+                {hasVideo && (
+                  <View style={styles.videoPlayOverlay}>
+                    <Ionicons name="play" size={14} color="#FFFFFF" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
     </View>
@@ -149,6 +188,11 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.body,
     color: colors.textSecondary,
   },
+  loadingBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -169,5 +213,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

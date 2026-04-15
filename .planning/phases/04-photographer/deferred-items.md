@@ -27,3 +27,15 @@ Items discovered during execution but out of scope for the current plan.
 **Location:** `app/node_modules` (transitive from existing deps + @imagemagick/magick-wasm)
 **Scope:** Mix of pre-existing + newly introduced by `@imagemagick/magick-wasm@0.0.39` devDependency. magick-wasm is only used for Edge Function WASM file extraction, not bundled into the app runtime.
 **Suggested action:** Review with `npm audit` in a dedicated security sweep plan.
+
+## From Plan 04-05 (2026-04-15)
+
+### 7. Phase 2 auth test 실패 3 파일 (17 tests)
+
+**Location:**
+- `app/src/__tests__/auth/nickname.test.ts`
+- `app/src/__tests__/auth/authContext.test.ts`
+- `app/src/__tests__/auth/block.test.ts`
+
+**Scope:** Phase 2 legacy tests. Phase 3 BlockContext Supabase migration 및 AuthContext signup 변경 이후 실패한 것으로 추정. Plan 04-05 가 건드리지 않은 파일들.
+**Phase 4 범위 밖** — Phase 2 재검증 plan 또는 `/gsd-debug` 세션에서 처리.

@@ -54,8 +54,13 @@ export default function PhotographerProfileScreen() {
 
   const {
     getPhotographer, getPhotoPostsByPhotographer, isFollowing, toggleFollow,
-    getCollectionsForPg, createCollection, deleteCollection, updatePhotographer,
+    getCollectionsForPg, createCollection, deleteCollection,
   } = usePhotographer();
+  // TODO (Phase 5 admin): Plan 03 Context 에서 updatePhotographer 제거됨.
+  // Phase 5 에서 photographerApi.updatePhotographer RPC 추가 후 await 전환 예정.
+  const updatePhotographer = (_photographerId: string, _patch: { display_name?: string; bio?: string }): void => {
+    console.warn('[PhotographerProfile] updatePhotographer 미구현 — Phase 5 photographerApi 이관 대상');
+  };
   const { user } = useAuth();
   const requireLogin = useLoginGate();
 

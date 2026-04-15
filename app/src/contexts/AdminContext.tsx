@@ -53,7 +53,15 @@ const AdminContext = createContext<AdminContextValue | null>(null);
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { photoPosts, photographers, updatePostStatus, updatePhotographerVerification, deletePhotoPost } = usePhotographer();
+  const { photoPosts, photographers, deletePhotoPost } = usePhotographer();
+  // TODO (Phase 5 admin): Plan 03 Context 에서 updatePostStatus/updatePhotographerVerification 제거됨.
+  // Phase 5 에서 adminApi 경유 호출로 교체 예정. 임시로 no-op 로 유지하여 runtime crash 방지.
+  const updatePostStatus = (_postId: string, _status: 'approved' | 'rejected', _reason?: string): void => {
+    console.warn('[AdminContext] updatePostStatus 미구현 — Phase 5 adminApi 이관 대상');
+  };
+  const updatePhotographerVerification = (_photographerId: string, _verified: boolean): void => {
+    console.warn('[AdminContext] updatePhotographerVerification 미구현 — Phase 5 adminApi 이관 대상');
+  };
   const { getPendingReports, resolveReport: resolveReportCtx } = useReport();
   const { addNotification } = useNotification();
 

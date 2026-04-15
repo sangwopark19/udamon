@@ -86,7 +86,7 @@ export default function CheerleaderProfileScreen() {
   const handleShare = useCallback(async () => {
     if (!cheerleader) return;
     await Share.share({
-      message: `${cheerleader.name} — udamon://cheerleader/${cheerleader.id}`,
+      message: `${cheerleader.name_ko} — udamon://cheerleader/${cheerleader.id}`,
     });
   }, [cheerleader]);
 
@@ -146,10 +146,12 @@ export default function CheerleaderProfileScreen() {
               </View>
             )}
             <View style={styles.heroTextCol}>
-              <Text style={[styles.heroName, { color: teamTextColor }]}>{cheerleader.name}</Text>
-              <Text style={[styles.heroDesc, { color: `${teamTextColor}80` }]} numberOfLines={2}>
-                {cheerleader.description}
-              </Text>
+              <Text style={[styles.heroName, { color: teamTextColor }]}>{cheerleader.name_ko}</Text>
+              {cheerleader.position ? (
+                <Text style={[styles.heroDesc, { color: `${teamTextColor}80` }]} numberOfLines={2}>
+                  {cheerleader.position}
+                </Text>
+              ) : null}
               {team && (
                 <TouchableOpacity
                   style={[styles.teamBadge, { backgroundColor: `${teamTextColor}15` }]}
@@ -207,7 +209,7 @@ export default function CheerleaderProfileScreen() {
             <Ionicons name="camera-outline" size={44} color={colors.textTertiary} />
             <Text style={styles.emptyText}>{t('cheerleader_empty')}</Text>
             <Text style={styles.emptySubtext}>
-              {t('cheerleader_empty_encourage', { name: cheerleader.name })}
+              {t('cheerleader_empty_encourage', { name: cheerleader.name_ko })}
             </Text>
             {isPhotographer && (
               <TouchableOpacity
