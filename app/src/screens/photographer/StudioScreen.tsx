@@ -52,41 +52,53 @@ export default function StudioScreen() {
 
   const [state, setState] = useState<StudioState>({ kind: 'loading' });
 
-  const loadState = useCallback(async () => {
-    // override 로 다른 사람의 스튜디오를 보는 경우 — Context 에서 직접 조회, state machine 우회
-    if (overridePhotographerId) {
-      const pg = getPhotographer(overridePhotographerId);
-      if (pg) {
-        setState({ kind: 'approved', photographer: pg });
-      } else {
-        setState({ kind: 'no_application' });
-      }
-      return;
-    }
-
-    if (!user?.id) {
-      setState({ kind: 'no_application' });
-      return;
-    }
-
-    setState({ kind: 'loading' });
-    const appResult = await photographerApi.fetchMyPhotographerApplication(user.id);
-    if (appResult.error) {
-      console.warn('[Studio] fetchMyPhotographerApplication error', appResult.error);
-      setState(determineStudioState({ appResult, photographerResult: null }));
-      return;
-    }
-
-    // application 이 approved 면 photographer row 도 함께 조회
-    const needsPhotographer =
-      appResult.data?.status === 'approved' ? await photographerApi.fetchPhotographerByUserId(user.id) : null;
-
-    setState(determineStudioState({ appResult, photographerResult: needsPhotographer }));
-  }, [user?.id, overridePhotographerId, getPhotographer]);
-
   useEffect(() => {
-    void loadState();
-  }, [loadState]);
+    let cancelled = false;
+
+    (async () => {
+      // override 로 다른 사람의 스튜디오를 보는 경우 — Context 에서 직접 조회, state machine 우회
+      if (overridePhotographerId) {
+        const pg = getPhotographer(overridePhotographerId);
+        if (pg) {
+          if (cancelled) return;
+          setState({ kind: 'approved', photographer: pg });
+        } else {
+          if (cancelled) return;
+          setState({ kind: 'no_application' });
+        }
+        return;
+      }
+
+      if (!user?.id) {
+        if (cancelled) return;
+        setState({ kind: 'no_application' });
+        return;
+      }
+
+      if (cancelled) return;
+      setState({ kind: 'loading' });
+      const appResult = await photographerApi.fetchMyPhotographerApplication(user.id);
+      if (appResult.error) {
+        console.warn('[Studio] fetchMyPhotographerApplication error', appResult.error);
+        if (cancelled) return;
+        setState(determineStudioState({ appResult, photographerResult: null }));
+        return;
+      }
+
+      // application 이 approved 면 photographer row 도 함께 조회
+      const needsPhotographer =
+        appResult.data?.status === 'approved'
+          ? await photographerApi.fetchPhotographerByUserId(user.id)
+          : null;
+
+      if (cancelled) return;
+      setState(determineStudioState({ appResult, photographerResult: needsPhotographer }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, overridePhotographerId, getPhotographer]);
 
   const handleSignupCta = useCallback(() => {
     navigation.navigate('PhotographerRegister');
