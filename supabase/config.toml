@@ -374,9 +374,7 @@ deno_version = 2
 # supabase.auth.getUser(token) 로 재검증 (T-4-05 owner check 포함).
 [functions.generate-thumbnails]
 verify_jwt = false
-
-[[functions.generate-thumbnails.static_files]]
-files = ['./functions/generate-thumbnails/magick.wasm']
+static_files = ["./functions/generate-thumbnails/magick.wasm"]
 
 [analytics]
 enabled = true
