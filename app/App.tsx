@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer, LinkingOptions, useNavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Linking from 'expo-linking';
 
@@ -30,6 +30,7 @@ import { MessageProvider } from './src/contexts/MessageContext';
 import { ComingSoonProvider } from './src/contexts/ComingSoonContext';
 import { AdminProvider } from './src/contexts/AdminContext';
 import ErrorBoundary from './src/components/common/ErrorBoundary';
+import { navigationRef } from './src/navigation/navigationRef';
 import { usePushDeepLinkHandler } from './src/hooks/usePushDeepLinkHandler';
 
 // Set notification behavior for foreground (skip in Expo Go — not supported since SDK 53)
@@ -166,7 +167,6 @@ function PushHandler() {
 function AppNavigator() {
   const { loading, isAuthenticated, guestMode, signupInProgress, profileReady, user } = useAuth();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
-  const navigationRef = useNavigationContainerRef<RootStackParamList>();
   const prevCanBrowseRef = useRef(false);
 
   // iOS 빌드타임 임베딩(app.json expo-font)과 별개로, 런타임 폰트 로딩도 보장
