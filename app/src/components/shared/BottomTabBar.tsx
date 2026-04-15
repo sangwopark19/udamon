@@ -7,17 +7,20 @@ import { useTranslation } from 'react-i18next';
 import { colors, fontSize, fontWeight } from '../../styles/theme';
 import { hapticLight } from '../../utils/haptics';
 
-const tabs: {
+interface TabDef {
   key: string;
   i18nKey: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconFocused: keyof typeof Ionicons.glyphMap;
-}[] = [
-  { key: 'Home',      i18nKey: 'tab_home',      icon: 'home-outline',        iconFocused: 'home' },
-  { key: 'Explore',   i18nKey: 'tab_discover',  icon: 'flame-outline',       iconFocused: 'flame' },
-  { key: 'Archive',   i18nKey: 'tab_archive',   icon: 'grid-outline',        iconFocused: 'grid' },
-  { key: 'Community', i18nKey: 'tab_community', icon: 'chatbubbles-outline', iconFocused: 'chatbubbles' },
-  { key: 'MyPage',    i18nKey: 'tab_my',        icon: 'person-outline',      iconFocused: 'person' },
+}
+
+const tabs: TabDef[] = [
+  { key: 'Home',      i18nKey: 'tab_home',         icon: 'home-outline',        iconFocused: 'home' },
+  { key: 'Explore',   i18nKey: 'tab_discover',     icon: 'flame-outline',       iconFocused: 'flame' },
+  { key: 'Studio',    i18nKey: 'tab_photographer', icon: 'camera-outline',      iconFocused: 'camera' },
+  { key: 'Archive',   i18nKey: 'tab_archive',      icon: 'grid-outline',        iconFocused: 'grid' },
+  { key: 'Community', i18nKey: 'tab_community',    icon: 'chatbubbles-outline', iconFocused: 'chatbubbles' },
+  { key: 'MyPage',    i18nKey: 'tab_my',           icon: 'person-outline',      iconFocused: 'person' },
 ];
 
 function AnimatedTab({
@@ -25,11 +28,13 @@ function AnimatedTab({
   isFocused,
   onPress,
   label,
+  renderIcon,
 }: {
-  tab: (typeof tabs)[number];
+  tab: TabDef;
   isFocused: boolean;
   onPress: () => void;
   label: string;
+  renderIcon?: (focused: boolean) => React.ReactNode;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   const prevFocused = useRef(isFocused);
@@ -54,11 +59,15 @@ function AnimatedTab({
       accessibilityState={{ selected: isFocused }}
     >
       <Animated.View style={{ transform: [{ scale }] }}>
-        <Ionicons
-          name={isFocused ? tab.iconFocused : tab.icon}
-          size={24}
-          color={isFocused ? colors.textPrimary : colors.textTertiary}
-        />
+        {renderIcon ? (
+          renderIcon(isFocused)
+        ) : (
+          <Ionicons
+            name={isFocused ? tab.iconFocused : tab.icon}
+            size={24}
+            color={isFocused ? colors.textPrimary : colors.textTertiary}
+          />
+        )}
       </Animated.View>
       <Text
         style={[styles.label, isFocused && styles.labelActive]}
@@ -70,24 +79,42 @@ function AnimatedTab({
   );
 }
 
-export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
+export default function BottomTabBar({ state, navigation, descriptors }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 6) }]}>
-      {tabs.map((tab, index) => {
+      {state.routes.map((route, index) => {
+        const tab = tabs.find((candidate) => candidate.key === route.name);
+        if (!tab) return null;
+
         const isFocused = state.index === index;
+        const options = descriptors[route.key]?.options;
+
+        // descriptors 에 override 가 있으면 우선 사용 (MainTabNavigator Studio 탭 등)
+        const labelOverride = typeof options?.tabBarLabel === 'string' ? options.tabBarLabel : undefined;
+        const label = labelOverride ?? t(tab.i18nKey);
+
+        const iconFn = options?.tabBarIcon;
+        const renderIcon = iconFn
+          ? (focused: boolean) =>
+              iconFn({
+                focused,
+                color: focused ? colors.textPrimary : colors.textTertiary,
+                size: 24,
+              })
+          : undefined;
 
         const onPress = () => {
           const event = navigation.emit({
             type: 'tabPress',
-            target: state.routes[index].key,
+            target: route.key,
             canPreventDefault: true,
           });
           if (!isFocused && !event.defaultPrevented) {
             hapticLight();
-            navigation.navigate(state.routes[index].name);
+            navigation.navigate(route.name);
           }
         };
 
@@ -97,7 +124,8 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
             tab={tab}
             isFocused={isFocused}
             onPress={onPress}
-            label={t(tab.i18nKey)}
+            label={label}
+            renderIcon={renderIcon}
           />
         );
       })}

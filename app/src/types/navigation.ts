@@ -3,6 +3,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 export type MainTabParamList = {
   Home: undefined;
   Explore: { teamId?: string } | undefined;
+  Studio: { photographerId?: string } | undefined;
   Archive: undefined;
   Community: { teamId?: string } | undefined;
   MyPage: undefined;
@@ -32,7 +33,7 @@ export type RootStackParamList = {
   PhotographerRegister: undefined;
   Onboarding: undefined;
   ProfileSetup: undefined;
-  Studio: { photographerId: string };
+  Studio: { photographerId?: string } | undefined;
   CollectionDetail: { collectionId: string };
   ContactSupport: undefined;
   InquiryList: undefined;

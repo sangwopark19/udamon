@@ -39,7 +39,7 @@ const buildPhotographer = (
   id: 'pg-1',
   user_id: 'user-1',
   display_name: 'tester',
-  bio: null,
+  bio: '',
   avatar_url: null,
   cover_url: null,
   team_id: null,

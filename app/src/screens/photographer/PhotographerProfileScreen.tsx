@@ -27,6 +27,7 @@ import { useRank } from '../../contexts/RankContext';
 import RankBadge from '../../components/common/RankBadge';
 import RankProgressBar from '../../components/common/RankProgressBar';
 import AwardsList from '../../components/photographer/AwardsList';
+import GradeBadge from '../../components/photographer/GradeBadge';
 import ThankYouWall from '../../components/photographer/ThankYouWall';
 import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
@@ -234,8 +235,16 @@ export default function PhotographerProfileScreen() {
           {/* Name + Badge */}
           <View style={styles.nameRow}>
             <Text style={styles.displayName}>{photographer.display_name}</Text>
+            <View style={styles.gradeBadgeWrap}>
+              <GradeBadge grade={photographer.grade} variant="icon-label" size="md" />
+            </View>
             {photographer.is_verified && (
-              <Ionicons name="checkmark-circle" size={18} color={colors.verified} />
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={colors.verified}
+                style={{ marginLeft: 8 }}
+              />
             )}
             <RankBadge tier={rankTier} progress={rankProgress} />
           </View>
@@ -677,6 +686,9 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sectionTitle,
     fontWeight: fontWeight.heading,
     color: colors.textPrimary,
+  },
+  gradeBadgeWrap: {
+    marginLeft: 8,
   },
   bio: {
     fontSize: fontSize.body,

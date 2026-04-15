@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,28 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { usePhotographer } from '../../contexts/PhotographerContext';
+import { useAuth } from '../../contexts/AuthContext';
+import * as photographerApi from '../../services/photographerApi';
+import GradeBadge from '../../components/photographer/GradeBadge';
 import type { RootStackParamList } from '../../types/navigation';
-import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import type { Photographer, PhotoPost } from '../../types/photographer';
+import type { PhotographerApplication } from '../../types/photographerApplication';
+import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/theme';
 import { formatCount } from '../../utils/time';
+import { determineStudioState, type StudioState } from './studioState';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+type StudioRoute = RouteProp<RootStackParamList, 'Studio'>;
 
 type SortMode = 'popular' | 'latest' | 'likes' | 'comments';
 
@@ -31,37 +38,236 @@ const GRID_GAP = 12;
 const GRID_COLS = 2;
 const CARD_WIDTH = (SCREEN_WIDTH - GRID_PAD * 2 - GRID_GAP) / GRID_COLS;
 
+// ─── Screen ─────────────────────────────────────────────────────
 export default function StudioScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const route = useRoute<RouteProp<RootStackParamList, 'Studio'>>();
-  const { photographerId } = route.params;
+  const route = useRoute<StudioRoute>();
+  const { user } = useAuth();
+  const { getPhotographer, getPhotoPostsByPhotographer } = usePhotographer();
 
-  const { getPhotographer, getPhotoPostsByPhotographer, setFeaturedPost } = usePhotographer();
+  // route.params.photographerId — 다른 포토그래퍼의 스튜디오를 조회할 때 사용 (옵셔널)
+  const overridePhotographerId = route.params?.photographerId;
 
+  const [state, setState] = useState<StudioState>({ kind: 'loading' });
+
+  const loadState = useCallback(async () => {
+    // override 로 다른 사람의 스튜디오를 보는 경우 — Context 에서 직접 조회, state machine 우회
+    if (overridePhotographerId) {
+      const pg = getPhotographer(overridePhotographerId);
+      if (pg) {
+        setState({ kind: 'approved', photographer: pg });
+      } else {
+        setState({ kind: 'no_application' });
+      }
+      return;
+    }
+
+    if (!user?.id) {
+      setState({ kind: 'no_application' });
+      return;
+    }
+
+    setState({ kind: 'loading' });
+    const appResult = await photographerApi.fetchMyPhotographerApplication(user.id);
+    if (appResult.error) {
+      console.warn('[Studio] fetchMyPhotographerApplication error', appResult.error);
+      setState(determineStudioState({ appResult, photographerResult: null }));
+      return;
+    }
+
+    // application 이 approved 면 photographer row 도 함께 조회
+    const needsPhotographer =
+      appResult.data?.status === 'approved' ? await photographerApi.fetchPhotographerByUserId(user.id) : null;
+
+    setState(determineStudioState({ appResult, photographerResult: needsPhotographer }));
+  }, [user?.id, overridePhotographerId, getPhotographer]);
+
+  useEffect(() => {
+    void loadState();
+  }, [loadState]);
+
+  const handleSignupCta = useCallback(() => {
+    navigation.navigate('PhotographerRegister');
+  }, [navigation]);
+
+  if (state.kind === 'loading') {
+    return <StudioLoading insets={insets} />;
+  }
+  if (state.kind === 'no_application') {
+    return (
+      <StudioEmptyHero
+        insets={insets}
+        iconName="camera-outline"
+        iconColor={colors.textTertiary}
+        iconSize={48}
+        title={t('studio_signup_desc')}
+        desc={t('studio_signup_desc')}
+        ctaLabel={t('studio_signup_cta')}
+        onCta={handleSignupCta}
+      />
+    );
+  }
+  if (state.kind === 'pending') {
+    return (
+      <StudioEmptyHero
+        insets={insets}
+        iconName="time-outline"
+        iconColor={colors.warning}
+        iconSize={64}
+        title={t('studio_pending_title')}
+        desc={t('studio_pending_desc')}
+        infoHint={t('studio_pending_notification_hint')}
+      />
+    );
+  }
+  if (state.kind === 'rejected') {
+    return (
+      <StudioRejectedHero
+        insets={insets}
+        application={state.application}
+        onReapply={handleSignupCta}
+      />
+    );
+  }
+  // approved
+  return (
+    <StudioApprovedLayout
+      insets={insets}
+      photographer={state.photographer}
+      getPhotoPostsByPhotographer={getPhotoPostsByPhotographer}
+      navigation={navigation}
+    />
+  );
+}
+
+// ─── Loading ────────────────────────────────────────────────────
+interface LoadingProps {
+  insets: EdgeInsets;
+}
+function StudioLoading({ insets }: LoadingProps) {
+  return (
+    <View style={[styles.screen, styles.centerFlex, { paddingTop: insets.top }]}>
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
+}
+
+// ─── Empty Hero (no_application / pending) ─────────────────────
+interface EmptyHeroProps {
+  insets: EdgeInsets;
+  iconName: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  iconSize: number;
+  title: string;
+  desc: string;
+  ctaLabel?: string;
+  onCta?: () => void;
+  infoHint?: string;
+}
+function StudioEmptyHero({
+  insets,
+  iconName,
+  iconColor,
+  iconSize,
+  title,
+  desc,
+  ctaLabel,
+  onCta,
+  infoHint,
+}: EmptyHeroProps) {
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={styles.heroContent}>
+        <Ionicons name={iconName} size={iconSize} color={iconColor} />
+        <Text style={styles.heroTitle}>{title}</Text>
+        <Text style={styles.heroDesc}>{desc}</Text>
+        {infoHint && (
+          <View style={styles.hintCard}>
+            <Ionicons name="information-circle-outline" size={20} color={colors.primary} />
+            <Text style={styles.hintText}>{infoHint}</Text>
+          </View>
+        )}
+        {ctaLabel && onCta && (
+          <TouchableOpacity style={styles.primaryCta} activeOpacity={0.7} onPress={onCta}>
+            <Text style={styles.primaryCtaLabel}>{ctaLabel}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ─── Rejected Hero ─────────────────────────────────────────────
+interface RejectedHeroProps {
+  insets: EdgeInsets;
+  application: PhotographerApplication;
+  onReapply: () => void;
+}
+function StudioRejectedHero({ insets, application, onReapply }: RejectedHeroProps) {
+  const { t } = useTranslation();
+  const reason = application.rejection_reason ?? t('studio_rejected_default_reason');
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={styles.heroContent}>
+        <Ionicons name="close-circle" size={64} color={colors.error} />
+        <Text style={styles.heroTitle}>{t('studio_rejected_title')}</Text>
+        <View style={styles.rejectionCard}>
+          <Text style={styles.rejectionLabel}>{t('studio_rejected_reason_label')}</Text>
+          <Text style={styles.rejectionBody}>{reason}</Text>
+        </View>
+        <TouchableOpacity style={styles.primaryCta} activeOpacity={0.7} onPress={onReapply}>
+          <Text style={styles.primaryCtaLabel}>{t('pg_register_reapply')}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ─── Approved Layout (existing Studio UI + GradeBadge) ────────
+interface ApprovedProps {
+  insets: EdgeInsets;
+  photographer: Photographer;
+  getPhotoPostsByPhotographer: (pgId: string) => PhotoPost[];
+  navigation: Nav;
+}
+function StudioApprovedLayout({
+  insets,
+  photographer,
+  getPhotoPostsByPhotographer,
+  navigation,
+}: ApprovedProps) {
+  const { t } = useTranslation();
   const [sortMode, setSortMode] = useState<SortMode>('popular');
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const photographer = getPhotographer(photographerId);
   const rawPosts = useMemo(
-    () => getPhotoPostsByPhotographer(photographerId),
-    [photographerId, getPhotoPostsByPhotographer],
+    () => getPhotoPostsByPhotographer(photographer.id),
+    [photographer.id, getPhotoPostsByPhotographer],
   );
   const posts = useMemo(() => {
     const copy = [...rawPosts];
     switch (sortMode) {
       case 'popular':
-        return copy.sort((a, b) => (b.like_count + b.comment_count) - (a.like_count + a.comment_count));
+        return copy.sort(
+          (a, b) => b.like_count + b.comment_count - (a.like_count + a.comment_count),
+        );
       case 'latest':
-        return copy.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return copy.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
       case 'likes':
         return copy.sort((a, b) => b.like_count - a.like_count);
       case 'comments':
         return copy.sort((a, b) => b.comment_count - a.comment_count);
     }
   }, [rawPosts, sortMode]);
-  const pendingCount = useMemo(() => rawPosts.filter((p) => p.status === 'pending').length, [rawPosts]);
+  const pendingCount = useMemo(
+    () => rawPosts.filter((p) => p.status === 'pending').length,
+    [rawPosts],
+  );
+
   const SORT_LABELS: Record<SortMode, string> = {
     popular: t('home_sort_popular'),
     latest: t('home_sort_latest'),
@@ -69,26 +275,41 @@ export default function StudioScreen() {
     comments: t('home_sort_comments'),
   };
 
-  if (!photographer) return null;
-
   const stats = [
     { label: t('studio_posts'), value: photographer.post_count, icon: 'grid-outline' as const },
-    { label: t('studio_likes'), value: posts.reduce((s, p) => s + p.like_count, 0), icon: 'heart-outline' as const },
-    { label: t('studio_views'), value: posts.reduce((s, p) => s + p.view_count, 0), icon: 'eye-outline' as const },
-    { label: t('studio_followers'), value: photographer.follower_count, icon: 'people-outline' as const },
+    {
+      label: t('studio_likes'),
+      value: posts.reduce((s, p) => s + p.like_count, 0),
+      icon: 'heart-outline' as const,
+    },
+    {
+      label: t('studio_views'),
+      value: posts.reduce((s, p) => s + p.view_count, 0),
+      icon: 'eye-outline' as const,
+    },
+    {
+      label: t('studio_followers'),
+      value: photographer.follower_count,
+      icon: 'people-outline' as const,
+    },
   ];
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+          style={styles.backBtn}
+          accessibilityLabel={t('a11y_back')}
+        >
           <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('studio_title')}</Text>
         <TouchableOpacity
           activeOpacity={0.7}
-          onPress={() => navigation.navigate('UploadPost' as any)}
+          onPress={() => navigation.navigate('UploadPost')}
           style={styles.addBtn}
         >
           <Ionicons name="add" size={22} color={colors.buttonPrimaryText} />
@@ -96,6 +317,22 @@ export default function StudioScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Grade strip (UI-SPEC §State C) */}
+        <View style={styles.topStrip}>
+          <GradeBadge grade={photographer.grade} variant="icon-label" size="sm" />
+          <Text style={styles.stripDisplayName} numberOfLines={1}>
+            {photographer.display_name}
+          </Text>
+          {photographer.is_verified && (
+            <Ionicons
+              name="checkmark-circle"
+              size={16}
+              color={colors.verified}
+              style={{ marginLeft: spacing.sm }}
+            />
+          )}
+        </View>
+
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
           {stats.map((s) => (
@@ -110,7 +347,7 @@ export default function StudioScreen() {
         {/* Pending badge */}
         {pendingCount > 0 && (
           <View style={styles.pendingBanner}>
-            <Ionicons name="time-outline" size={16} color={colors.warning ?? '#F59E0B'} />
+            <Ionicons name="time-outline" size={16} color={colors.warning} />
             <Text style={styles.pendingBannerText}>
               {t('post_status_pending')} {pendingCount}건
             </Text>
@@ -128,7 +365,11 @@ export default function StudioScreen() {
             onPress={() => setShowDropdown(!showDropdown)}
           >
             <Text style={styles.sortBtnText}>{SORT_LABELS[sortMode]}</Text>
-            <Ionicons name={showDropdown ? 'chevron-up' : 'chevron-down'} size={12} color={colors.primary} />
+            <Ionicons
+              name={showDropdown ? 'chevron-up' : 'chevron-down'}
+              size={12}
+              color={colors.primary}
+            />
           </TouchableOpacity>
         </View>
         {showDropdown && (
@@ -137,13 +378,20 @@ export default function StudioScreen() {
               <TouchableOpacity
                 key={mode}
                 style={[styles.dropdownItem, sortMode === mode && styles.dropdownItemActive]}
-                onPress={() => { setSortMode(mode); setShowDropdown(false); }}
+                onPress={() => {
+                  setSortMode(mode);
+                  setShowDropdown(false);
+                }}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.dropdownText, sortMode === mode && styles.dropdownTextActive]}>
+                <Text
+                  style={[styles.dropdownText, sortMode === mode && styles.dropdownTextActive]}
+                >
                   {SORT_LABELS[mode]}
                 </Text>
-                {sortMode === mode && <Ionicons name="checkmark" size={14} color={colors.primary} />}
+                {sortMode === mode && (
+                  <Ionicons name="checkmark" size={14} color={colors.primary} />
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -155,52 +403,57 @@ export default function StudioScreen() {
           </View>
         ) : (
           <View style={styles.postGrid}>
-            {posts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.postCard}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-                onLongPress={() => {
-                  Alert.alert(
-                    t('pg_featured_post'),
-                    post.is_featured ? t('pg_featured_unset_confirm') : t('pg_featured_set_confirm'),
-                    [
-                      { text: t('btn_cancel'), style: 'cancel' },
-                      { text: post.is_featured ? t('pg_featured_unset') : t('pg_featured_set'), onPress: () => setFeaturedPost(photographerId, post.id) },
-                    ],
-                  );
-                }}
-              >
-                <View style={styles.postImageWrap}>
-                  <Image source={{ uri: post.images[0] }} style={styles.postCardImage} />
-                  {post.is_featured && (
-                    <View style={styles.featuredBadge}>
-                      <Text style={styles.featuredBadgeText}>✨</Text>
-                    </View>
-                  )}
-                  {post.status === 'pending' && (
-                    <View style={styles.pendingBadge}>
-                      <Ionicons name="time-outline" size={10} color="#fff" />
-                      <Text style={styles.pendingBadgeText}>{t('post_status_pending')}</Text>
-                    </View>
-                  )}
-                  <View style={styles.postOverlay}>
-                    <View style={styles.postLikeRow}>
-                      <Ionicons name="heart" size={10} color={colors.error} />
-                      <Text style={styles.postLikeText}>{formatCount(post.like_count)}</Text>
+            {posts.map((post) => {
+              const previewUrl = post.thumbnail_urls?.[0] ?? post.images[0];
+              const hasVideo = (post.videos?.length ?? 0) > 0;
+              return (
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.postCard}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                >
+                  <View style={styles.postImageWrap}>
+                    <Image source={{ uri: previewUrl }} style={styles.postCardImage} />
+                    {hasVideo && (
+                      <View style={styles.videoPlayOverlay}>
+                        <Ionicons name="play" size={16} color="#FFFFFF" />
+                      </View>
+                    )}
+                    {post.is_featured && (
+                      <View style={styles.featuredBadge}>
+                        <Text style={styles.featuredBadgeText}>✨</Text>
+                      </View>
+                    )}
+                    {post.status === 'pending' && (
+                      <View style={styles.pendingBadge}>
+                        <Ionicons name="time-outline" size={10} color="#fff" />
+                        <Text style={styles.pendingBadgeText}>{t('post_status_pending')}</Text>
+                      </View>
+                    )}
+                    <View style={styles.postOverlay}>
+                      <View style={styles.postLikeRow}>
+                        <Ionicons name="heart" size={10} color={colors.error} />
+                        <Text style={styles.postLikeText}>{formatCount(post.like_count)}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.postInfo}>
-                  <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
-                  <View style={styles.postMeta}>
-                    <Ionicons name="chatbubble-outline" size={10} color={colors.textTertiary} />
-                    <Text style={styles.postMetaText}>{post.comment_count}</Text>
+                  <View style={styles.postInfo}>
+                    <Text style={styles.postTitle} numberOfLines={2}>
+                      {post.title}
+                    </Text>
+                    <View style={styles.postMeta}>
+                      <Ionicons
+                        name="chatbubble-outline"
+                        size={10}
+                        color={colors.textTertiary}
+                      />
+                      <Text style={styles.postMetaText}>{post.comment_count}</Text>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
 
@@ -210,8 +463,10 @@ export default function StudioScreen() {
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  centerFlex: { justifyContent: 'center', alignItems: 'center' },
   header: {
     height: 56,
     flexDirection: 'row',
@@ -222,8 +477,12 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: radius.button, backgroundColor: colors.surface,
-    justifyContent: 'center', alignItems: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: radius.button,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: fontSize.cardName,
@@ -231,11 +490,107 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   addBtn: {
-    width: 36, height: 36, borderRadius: radius.button,
+    width: 36,
+    height: 36,
+    borderRadius: radius.button,
     backgroundColor: colors.primary,
-    justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: { padding: 16 },
+
+  // Top strip (approved state — GradeBadge + display_name + verified)
+  topStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  stripDisplayName: {
+    marginLeft: spacing.sm,
+    flex: 1,
+    fontSize: fontSize.cardName,
+    fontWeight: fontWeight.heading,
+    color: colors.textPrimary,
+  },
+
+  // Hero layout (no_application / pending / rejected)
+  heroContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: spacing.xxl,
+    gap: 16,
+  },
+  heroTitle: {
+    fontSize: fontSize.sectionTitle,
+    fontWeight: fontWeight.heading,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+  },
+  heroDesc: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 320,
+    marginTop: -4,
+  },
+  hintCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: 16,
+    marginTop: spacing.md,
+  },
+  hintText: {
+    flex: 1,
+    fontSize: fontSize.meta,
+    fontWeight: fontWeight.body,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  primaryCta: {
+    height: 48,
+    paddingHorizontal: 32,
+    backgroundColor: colors.primary,
+    borderRadius: radius.button,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.xxl,
+  },
+  primaryCtaLabel: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.buttonPrimaryText,
+  },
+
+  // Rejected card
+  rejectionCard: {
+    width: '100%',
+    backgroundColor: colors.errorAlpha10,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    padding: 16,
+    gap: 8,
+    marginTop: spacing.md,
+  },
+  rejectionLabel: {
+    fontSize: fontSize.meta,
+    fontWeight: fontWeight.body,
+    color: colors.error,
+  },
+  rejectionBody: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.textPrimary,
+    lineHeight: 22,
+  },
 
   // Stats
   statsGrid: {
@@ -287,7 +642,7 @@ const styles = StyleSheet.create({
   pendingBannerText: {
     fontSize: fontSize.meta,
     fontWeight: fontWeight.name,
-    color: '#F59E0B',
+    color: colors.warning,
   },
   allPostsHeader: {
     flexDirection: 'row',
@@ -321,7 +676,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   dropdownItemActive: { backgroundColor: colors.primaryAlpha8 },
-  dropdownText: { fontSize: fontSize.meta, fontWeight: fontWeight.body, color: colors.textPrimary },
+  dropdownText: {
+    fontSize: fontSize.meta,
+    fontWeight: fontWeight.body,
+    color: colors.textPrimary,
+  },
   dropdownTextActive: { fontWeight: fontWeight.heading, color: colors.primary },
 
   // Post Grid (2xN)
@@ -403,7 +762,7 @@ const styles = StyleSheet.create({
   pendingBadge: {
     position: 'absolute',
     top: 6,
-    left: 6,
+    right: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
@@ -416,6 +775,17 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: fontWeight.name,
     color: '#fff',
+  },
+  videoPlayOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // Empty
