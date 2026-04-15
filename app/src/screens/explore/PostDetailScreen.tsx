@@ -71,9 +71,23 @@ export default function PostDetailScreen() {
   const { postId } = route.params;
   const {
     getPhotoPost, getPhotographer, isPhotoLiked, togglePhotoLike,
-    getCommentsForPost, addComment, deleteComment, toggleCommentLike, isCommentLiked,
+    getCommentsForPost, addComment, deleteComment,
     deletePhotoPost,
   } = usePhotographer();
+
+  // Plan 04 hand-off: toggleCommentLike / isCommentLiked 가 PhotographerContext 에서 제거됨 (Plan 03 D-22).
+  // Plan 05 에서 photo_likes target_type='comment' DB 트리거 검증 후 context 재추가 예정.
+  // 현재는 로컬 state stub — 재렌더 시 초기화되나 UI 동작은 유지.
+  const [localLikedComments, setLocalLikedComments] = useState<Set<string>>(new Set());
+  const isCommentLiked = (commentId: string) => localLikedComments.has(commentId);
+  const toggleCommentLike = (commentId: string) => {
+    setLocalLikedComments((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+  };
   const { user } = useAuth();
   const { isPostSaved, toggleSavePost } = useArchive();
   const requireLogin = useLoginGate();
@@ -467,7 +481,7 @@ export default function PostDetailScreen() {
                 onPress={() => navigation.navigate('CheerleaderProfile', { cheerleaderId: post.cheerleader_id! })}
               >
                 <Ionicons name="heart" size={10} color={colors.error} />
-                <Text style={styles.playerChipText}>{post.cheerleader.name}</Text>
+                <Text style={styles.playerChipText}>{post.cheerleader.name_ko}</Text>
               </TouchableOpacity>
             )}
           </View>

@@ -30,9 +30,15 @@ import type { RootStackParamList } from '../../types/navigation';
 import type { PhotoPost, Player } from '../../types/photographer';
 import type { Cheerleader } from '../../types/cheerleader';
 import ImageEditorModal from '../../components/common/ImageEditorModal';
+import VideoPlayer from '../../components/common/VideoPlayer';
 import * as photographerApi from '../../services/photographerApi';
 import { optimizeImage } from '../../utils/image';
+import { validateVideoAsset } from '../../utils/videoValidation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+
+// Re-export for test / external reference (PLAN must_haves.truths:
+// "grep -q 'validateVideoAsset' app/src/screens/photographer/UploadPostScreen.tsx").
+export { validateVideoAsset, ALLOWED_VIDEO_MIME, VIDEO_MAX_DURATION_MS, VIDEO_MAX_SIZE_BYTES } from '../../utils/videoValidation';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'UploadPost'>;
@@ -47,7 +53,7 @@ export default function UploadPostScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { user, session } = useAuth();
-  const { getPlayersByTeam, getCheerleadersByTeam, getPhotoPost, addPhotoPost, deletePhotoPost, getCollectionsForPg, addPostToCollection, isRemote, getPhotographer } = usePhotographer();
+  const { getPlayersByTeam, getCheerleadersByTeam, getPhotoPost, addPhotoPost, deletePhotoPost, getCollectionsForPg, addPostToCollection, getPhotographer } = usePhotographer();
   const { showToast } = useToast();
 
   const isEditing = !!route.params?.postId;
@@ -61,6 +67,8 @@ export default function UploadPostScreen() {
   const [selectedCheerleaderId, setSelectedCheerleaderId] = useState<string | null>(existingPost?.cheerleader_id ?? null);
   const [images, setImages] = useState<string[]>(existingPost?.images ?? []);
   const [videos, setVideos] = useState<string[]>([]);
+  // D-03 / ADJ-02: 업로드 시 uploadPostVideos 에 videos 와 병렬로 전달될 asset-별 contentType.
+  const [videoContentTypes, setVideoContentTypes] = useState<string[]>([]);
   const [rightsConfirmed, setRightsConfirmed] = useState(isEditing);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [editingImageIdx, setEditingImageIdx] = useState<number | null>(null);
@@ -109,6 +117,7 @@ export default function UploadPostScreen() {
     }
   };
 
+  // D-03 / ADJ-02 / T-4-02 / T-4-06: duration 30s / size 50MB / mp4+quicktime 화이트리스트 검증
   const handleAddVideo = async () => {
     if (videos.length >= MAX_VIDEOS) {
       Alert.alert(t('upload_max_videos'), t('upload_max_videos_desc', { max: MAX_VIDEOS }));
@@ -121,9 +130,33 @@ export default function UploadPostScreen() {
       quality: 0.7,
     });
 
-    if (!result.canceled && result.assets.length > 0) {
-      setVideos((prev) => [...prev, result.assets[0].uri].slice(0, MAX_VIDEOS));
+    if (result.canceled || result.assets.length === 0) return;
+    const asset = result.assets[0];
+
+    const validation = validateVideoAsset({
+      duration: asset.duration ?? null,
+      fileSize: asset.fileSize ?? null,
+      // Android 일부 기기 lowercase key fallback (RESEARCH Pitfall / Example 5)
+      filesize: (asset as unknown as { filesize?: number | null }).filesize ?? null,
+      mimeType: asset.mimeType ?? null,
+      uri: asset.uri,
+    });
+
+    if (!validation.ok) {
+      const titleKey =
+        validation.reason === 'too_long' ? 'upload_video_too_long_title' :
+        validation.reason === 'too_large' ? 'upload_video_too_large_title' :
+        'upload_video_unsupported_format_title';
+      const descKey =
+        validation.reason === 'too_long' ? 'upload_video_too_long_desc' :
+        validation.reason === 'too_large' ? 'upload_video_too_large_desc' :
+        'upload_video_unsupported_format_desc';
+      Alert.alert(t(titleKey), t(descKey));
+      return;
     }
+
+    setVideos((prev) => [...prev, asset.uri].slice(0, MAX_VIDEOS));
+    setVideoContentTypes((prev) => [...prev, validation.contentType!].slice(0, MAX_VIDEOS));
   };
 
   const handleRemoveImage = (idx: number) => {
@@ -132,6 +165,7 @@ export default function UploadPostScreen() {
 
   const handleRemoveVideo = (idx: number) => {
     setVideos((prev) => prev.filter((_, i) => i !== idx));
+    setVideoContentTypes((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleEditSave = (uri: string) => {
@@ -141,14 +175,17 @@ export default function UploadPostScreen() {
     setEditingImageIdx(null);
   };
 
+  // Phase 3 D-09 순서 + 영상 단계 추가 (D-04) + 썸네일 fire-and-forget (D-14)
+  // isRemote 분기 제거 — Plan 03 Context 재작성으로 Supabase 전용 경로만 존재
   const doPublish = async () => {
     const team = KBO_TEAMS.find((t) => t.id === selectedTeamId);
     const player = teamPlayers.find((p) => p.id === selectedPlayerId);
     const cheerleader = teamCheerleaders.find((c) => c.id === selectedCheerleaderId);
     const now = new Date().toISOString();
 
+    // ─── Edit flow (기존 게시물 업데이트) ─────────
     if (isEditing && existingPost) {
-      deletePhotoPost(existingPost.id);
+      await deletePhotoPost(existingPost.id); // Plan 03: async
       const updated: PhotoPost = {
         ...existingPost,
         title: title.trim(),
@@ -160,7 +197,7 @@ export default function UploadPostScreen() {
         updated_at: now,
         team: { name_ko: team?.nameKo ?? '' },
         player: player ? { name_ko: player.name_ko, number: player.number } : null,
-        cheerleader: cheerleader ? { name: cheerleader.name } : null,
+        cheerleader: cheerleader ? { name_ko: cheerleader.name_ko } : null,
       };
       addPhotoPost(updated);
       showToast(t('btn_done'));
@@ -168,86 +205,101 @@ export default function UploadPostScreen() {
       return;
     }
 
-    // New post flow
-    let finalImages = images;
-    const userId = user?.id ?? '';
-    const pg = getPhotographer(userId);
+    // ─── New post flow (Supabase 전용) ──────────
+    if (!user?.id || !session) {
+      Alert.alert(t('pg_register_fail'), t('pg_register_fail_desc'));
+      return;
+    }
 
-    // Upload images to R2 if remote
-    if (isRemote && userId && session) {
-      setUploading(true);
-      try {
-        // Optimize images before upload
-        const optimized = await Promise.all(images.map(optimizeImage));
-        const uploadResult = await photographerApi.uploadPostImages(userId, optimized, session.access_token);
-        if (uploadResult.error || !uploadResult.data) {
-          showToast(uploadResult.error ?? 'Upload failed');
-          setUploading(false);
-          return;
-        }
-        finalImages = uploadResult.data;
+    const pg = getPhotographer(user.id);
+    if (!pg) {
+      // 심사 미승인 상태 — StudioScreen 에서 차단되어야 하지만 방어
+      Alert.alert(t('pg_register_fail'), t('studio_pending_desc'));
+      return;
+    }
 
-        // Create post in DB
-        const postResult = await photographerApi.createPhotoPost({
-          photographerId: pg?.id ?? userId,
-          teamSlug: selectedTeamId!,
-          playerId: selectedPlayerId,
-          title: title.trim(),
-          description: description.trim(),
-          images: finalImages,
-        });
-
-        if (postResult.error || !postResult.data) {
-          showToast(postResult.error ?? 'Post creation failed');
-          setUploading(false);
-          return;
-        }
-
-        // Add to local state for immediate display
-        addPhotoPost(postResult.data);
-        if (selectedCollectionId) {
-          addPostToCollection(selectedCollectionId, postResult.data.id);
-        }
-      } catch {
-        showToast('Upload failed');
+    setUploading(true);
+    try {
+      // Step 1: optimize + upload images (Phase 3 D-09)
+      const optimized = await Promise.all(images.map(optimizeImage));
+      const imageUpload = await photographerApi.uploadPostImages(user.id, optimized, session.access_token);
+      if (imageUpload.error || !imageUpload.data) {
+        Alert.alert(
+          t('upload_video_upload_failed_title'),
+          imageUpload.error ?? t('upload_video_upload_failed_desc'),
+        );
         setUploading(false);
         return;
       }
-      setUploading(false);
-    } else {
-      // Local-only (mock mode)
-      const newPost: PhotoPost = {
-        id: `pp-${Date.now()}`,
-        photographer_id: pg?.id ?? userId,
-        team_id: selectedTeamId!,
-        player_id: selectedPlayerId,
-        cheerleader_id: selectedCheerleaderId,
+
+      // Step 2: upload videos (D-04, ADJ-02 contentTypes)
+      let finalVideos: string[] = [];
+      if (videos.length > 0) {
+        const videoUpload = await photographerApi.uploadPostVideos(
+          user.id,
+          videos,
+          session.access_token,
+          videoContentTypes,
+        );
+        if (videoUpload.error || !videoUpload.data) {
+          Alert.alert(
+            t('upload_video_upload_failed_title'),
+            videoUpload.error ?? t('upload_video_upload_failed_desc'),
+          );
+          setUploading(false);
+          return;
+        }
+        finalVideos = videoUpload.data;
+      }
+
+      // Step 3: createPhotoPost (D-05)
+      const postResult = await photographerApi.createPhotoPost({
+        photographerId: pg.id,
+        teamSlug: selectedTeamId!,
+        playerId: selectedPlayerId,
+        cheerleaderId: selectedCheerleaderId,
         title: title.trim(),
         description: description.trim(),
-        images: finalImages,
-        like_count: 0,
-        comment_count: 0,
-        view_count: 0,
-        is_featured: false,
-        status: 'pending' as const,
-        created_at: now,
-        updated_at: now,
-        photographer: {
-          display_name: user?.display_name ?? user?.username ?? 'Photographer',
-          avatar_url: user?.avatar_url ?? null,
-          is_verified: false,
-        },
-        team: { name_ko: team?.nameKo ?? '' },
-        player: player ? { name_ko: player.name_ko, number: player.number } : null,
-        cheerleader: cheerleader ? { name: cheerleader.name } : null,
-      };
-      addPhotoPost(newPost);
-      if (selectedCollectionId) {
-        addPostToCollection(selectedCollectionId, newPost.id);
+        images: imageUpload.data,
+        videos: finalVideos,
+      });
+      if (postResult.error || !postResult.data) {
+        Alert.alert(
+          t('upload_video_upload_failed_title'),
+          postResult.error ?? t('upload_video_upload_failed_desc'),
+        );
+        setUploading(false);
+        return;
       }
-    }
 
-    setShowReviewModal(true);
+      addPhotoPost(postResult.data);
+      if (selectedCollectionId) {
+        await addPostToCollection(selectedCollectionId, postResult.data.id);
+      }
+
+      // Step 4: generate-thumbnails fire-and-forget (D-14)
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+      if (supabaseUrl && imageUpload.data.length > 0) {
+        fetch(`${supabaseUrl}/functions/v1/generate-thumbnails`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            postId: postResult.data.id,
+            imageUrls: imageUpload.data,
+          }),
+        }).catch((e) => console.warn('[Thumbnail] fire-and-forget failed', e));
+      }
+
+      setShowReviewModal(true);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Upload failed';
+      Alert.alert(t('upload_video_upload_failed_title'), msg);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handlePublish = () => {
@@ -375,28 +427,32 @@ export default function UploadPostScreen() {
             </View>
           )}
 
-          {/* Video Section */}
+          {/* Video Section — UI-SPEC §Video section */}
           <View style={styles.videoSection}>
             <View style={styles.videoHeader}>
               <Ionicons name="videocam-outline" size={16} color={colors.textSecondary} />
               <Text style={styles.videoLabel}>{t('upload_video_label')} ({videos.length}/{MAX_VIDEOS})</Text>
             </View>
+            <Text style={styles.videoHint}>{t('upload_video_hint')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.videoRow}>
                 {videos.map((uri, i) => (
-                  <View key={i} style={styles.videoThumb}>
-                    <View style={styles.videoPlaceholderInner}>
-                      <Ionicons name="play-circle" size={24} color={colors.buttonPrimaryText} />
-                    </View>
-                    <TouchableOpacity style={styles.thumbRemove} onPress={() => handleRemoveVideo(i)}>
+                  <View key={uri + i} style={styles.videoThumb}>
+                    <VideoPlayer uri={uri} mode="studio" width={80} height={80} />
+                    <TouchableOpacity
+                      style={styles.thumbRemove}
+                      onPress={() => handleRemoveVideo(i)}
+                      activeOpacity={0.7}
+                      accessibilityLabel={t('btn_delete')}
+                    >
                       <Ionicons name="close-circle" size={18} color={colors.error} />
                     </TouchableOpacity>
                   </View>
                 ))}
                 {videos.length < MAX_VIDEOS && (
-                  <TouchableOpacity style={styles.videoAddBtn} onPress={handleAddVideo}>
+                  <TouchableOpacity style={styles.videoAddBtn} onPress={handleAddVideo} activeOpacity={0.7}>
                     <Ionicons name="add" size={22} color={colors.textTertiary} />
-                    <Text style={styles.videoAddText}>{t('upload_add_video')}</Text>
+                    <Text style={styles.videoAddText}>{t('upload_add_video_prompt')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -501,7 +557,7 @@ export default function UploadPostScreen() {
                           activeOpacity={isEditing ? 1 : 0.7}
                         >
                           <Text style={[styles.playerChipText, isSelected && styles.playerChipTextActive]}>
-                            {cl.name}
+                            {cl.name_ko}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -609,7 +665,15 @@ export default function UploadPostScreen() {
             onPress={() =>
               Alert.alert(t('upload_delete'), t('upload_delete_confirm'), [
                 { text: t('btn_cancel'), style: 'cancel' },
-                { text: t('btn_delete'), style: 'destructive', onPress: () => { deletePhotoPost(existingPost!.id); showToast(t('post_deleted')); navigation.goBack(); } },
+                {
+                  text: t('btn_delete'),
+                  style: 'destructive',
+                  onPress: async () => {
+                    await deletePhotoPost(existingPost!.id);
+                    showToast(t('post_deleted'));
+                    navigation.goBack();
+                  },
+                },
               ])
             }
           >
@@ -809,12 +873,13 @@ const styles = StyleSheet.create({
 
   // Video
   videoSection: { marginTop: 16 },
-  videoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  videoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   videoLabel: { fontSize: fontSize.meta, fontWeight: fontWeight.name, color: colors.textSecondary },
+  videoHint: { fontSize: fontSize.micro, color: colors.textTertiary, marginBottom: 8 },
   videoRow: { flexDirection: 'row', gap: 8 },
   videoThumb: {
     width: 80, height: 80, borderRadius: radius.md,
-    backgroundColor: colors.primary, overflow: 'hidden',
+    backgroundColor: colors.surface, overflow: 'hidden',
   },
   videoPlaceholderInner: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
