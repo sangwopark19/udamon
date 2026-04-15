@@ -94,7 +94,7 @@ Plans:
 - [x] 04-03-PLAN.md — Wave 2: PhotographerContext Supabase 전면 전환 (mock 제거, togglePhotoLike/toggleFollow userId 주입, 컬렉션 await, loadMorePhotoPosts) + mockPhotographers/mockCheerleaders 삭제
 - [x] 04-04-PLAN.md — Wave 3a: VideoPlayer (expo-video) + GradeBadge + PhotographerCard 통합 + UploadPostScreen 영상 검증/업로드/썸네일 fire-and-forget + i18n 33 keys + bronze 토큰
 - [x] 04-05-PLAN.md — Wave 3b: StudioScreen state machine (null/pending/approved/rejected) + PhotographerRegisterScreen Step 4 재설계 + PhotographerProfileScreen 헤더 GradeBadge + CollectionDetailScreen async fetch + MainTabNavigator 탭 분기 + [BLOCKING] Manual QA matrix 완주
-- [ ] 04-06-PLAN.md — Wave 4 (gap closure): HI-01 StudioScreen cancelled guard + HI-02 MainTabNavigator is_photographer-first bootstrap + HI-03 033 partial unique index (pending per user) + pgTAP + [BLOCKING] supabase db push
+- [x] 04-06-PLAN.md — Wave 4 (gap closure): HI-01 StudioScreen cancelled guard + HI-02 MainTabNavigator is_photographer-first bootstrap + HI-03 033 partial unique index (pending per user) + pgTAP + [BLOCKING] supabase db push
 
 ### Phase 5: Admin
 **Goal**: 관리자가 어드민 웹에서 사용자, 커뮤니티, 포토그래퍼, 공지사항을 실제 데이터로 관리할 수 있는 상태
