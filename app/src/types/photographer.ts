@@ -10,6 +10,7 @@ export interface Photographer {
   follower_count: number;
   post_count: number;
   is_verified: boolean;
+  grade: number;                 // D-17: post_count + floor(follower_count / 10) — mapPhotographer 가 계산
   created_at: string;
 }
 
@@ -23,6 +24,8 @@ export interface PhotoPost {
   title: string;
   description: string;
   images: string[];
+  videos: string[];              // D-01 / D-05: R2 public URL 배열, max 3
+  thumbnail_urls: string[];      // D-12~D-15: generate-thumbnails EF 가 채움. 빈 경우 images[0] fallback
   like_count: number;
   comment_count: number;
   view_count: number;
@@ -45,8 +48,9 @@ export interface PhotoPost {
     name_ko: string;
     number: number;
   } | null;
+  // D-20: DB schema 기준 name_ko 로 재정의 (기존 name 제거)
   cheerleader?: {
-    name: string;
+    name_ko: string;
   } | null;
 }
 
