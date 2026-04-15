@@ -1,8 +1,10 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Phase 04 UAT Test 1 blocker — npx expo start 후 안드 시뮬에서 [runtime not ready]: Error: Cannot find native module 'ExpoVideo'"
 created: 2026-04-15T07:00:00Z
-updated: 2026-04-15T07:00:00Z
+updated: 2026-04-15T06:55:00Z
+resolved_at: 2026-04-15T15:55:00+09:00
+resolved_by: Plan 04-07 — EAS dev build (Android 0ea0f6c8, iOS f317a5a2) 재생성 + simulator install + useLoginGate navigationRef 전환 (commit ad4e42d). Android emulator fresh start 로그인 화면 정상 렌더링 확인.
 goal: find_root_cause_only
 ---
 
