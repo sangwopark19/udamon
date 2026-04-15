@@ -39,6 +39,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
+    "@imagemagick/magick-wasm": "^0.0.39",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
     "jest": "^29.7.0",
