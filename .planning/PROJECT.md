@@ -22,6 +22,9 @@ KBO 팬이 구단별 커뮤니티에서 소통하고, 팬 포토그래퍼가 경
 - ✓ OAuth 딥링크 구조 (udamon://auth/callback) — existing
 - ✓ i18n 한국어 설정 — existing
 - ✓ Expo Push Notification 딥링크 핸들러 — existing
+- ✓ 포토그래퍼 연동 완성 — 영상 업로드 (max 3, mp4/mov 50MB), 심사 프로세스 (5-step register + 승인 트리거 ADJ-01), 등급 계산 (posts + followers/10) — Phase 4 (2026-04-15)
+- ✓ 이미지 리사이징/썸네일 Edge Function — generate-thumbnails (magick-wasm 400×400 cover crop, R2 ↔ DB thumbnail_urls) — Phase 4 (2026-04-15)
+- ✓ 중복 pending 신청 서버 차단 — photographer_applications partial UNIQUE WHERE status='pending' — Phase 4 gap closure (2026-04-15)
 
 ### Active
 
@@ -36,8 +39,6 @@ KBO 팬이 구단별 커뮤니티에서 소통하고, 팬 포토그래퍼가 경
 - [ ] 커뮤니티 이미지 업로드 (R2 community-posts prefix)
 - [ ] 검색 기능 (DB 기반)
 - [ ] 트렌딩 계산 (24시간 윈도우)
-- [ ] 포토그래퍼 연동 완성 (영상 업로드, 심사 프로세스, 등급 계산)
-- [ ] 이미지 리사이징/썸네일 Edge Function
 - [ ] 어드민 인증 → Supabase Auth 전환
 - [ ] 어드민 웹 전체 20페이지 Supabase 연동
 - [ ] 인앱 알림 시스템 (notifications 테이블)
@@ -123,4 +124,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after initialization*
+*Last updated: 2026-04-15 after Phase 04-photographer completion*
