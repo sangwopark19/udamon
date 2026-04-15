@@ -1,6 +1,6 @@
 ---
 phase: 04-photographer
-verified: 2026-04-15T04:00:00Z
+verified: 2026-04-15T06:00:00Z
 status: human_needed
 score: 26/28
 overrides_applied: 0
@@ -31,16 +31,37 @@ human_verification:
     expected: "UploadPostScreen에서 사진 업로드 후 썸네일 URL이 photo_posts.thumbnail_urls에 채워짐"
     why_human: "R2 download → magick-wasm resize → R2 upload → DB update 전체 파이프라인은 실기기+원격 환경 필요"
   - test: "MainTabNavigator Studio 탭 label/icon 분기 확인 (Section C 일부)"
-    expected: "로그인 후 탭 바에서 no_app=camera, pending=time, approved=aperture 아이콘 표시"
-    why_human: "HI-02 flicker 이슈 포함하여 실제 탭 전환 시 시각적 분기 확인 필요"
+    expected: "로그인 후 탭 바에서 no_app=camera, pending=time, approved=aperture 아이콘 표시. HI-02 flicker 해소 후 첫 프레임 동작 확인"
+    why_human: "실기기 탭 전환 시각 확인 필요. HI-02 flicker 제거 여부는 실기기에서만 확인 가능"
+re_verification:
+  previous_status: human_needed
+  previous_score: 26/28
+  gaps_closed:
+    - "HI-01: StudioScreen.loadState cancelled guard 추가 — unmount 후 setState 방지 (f45a447)"
+    - "HI-02: MainTabNavigator user.is_photographer synchronous bootstrap — 첫 프레임 flicker 제거 (449c3dd)"
+    - "HI-03: 033_photographer_apps_unique_pending.sql — partial unique index 원격 Supabase 배포 (ef60a8b)"
+  gaps_remaining: []
+  regressions: []
 ---
 
-# Phase 04: Photographer 검증 보고서
+# Phase 04: Photographer 검증 보고서 (Wave 4 Gap Closure 재검증)
 
 **Phase Goal:** 팬 포토그래퍼가 사진/영상을 업로드하고, 심사를 받고, 등급에 따라 활동할 수 있는 완성된 갤러리 시스템
-**검증 일시:** 2026-04-15T04:00:00Z
+**검증 일시:** 2026-04-15T06:00:00Z
 **상태:** human_needed
-**재검증:** 아니오 — 초기 검증
+**재검증:** 예 — Plan 06 (gap_closure, wave 4) 실행 후 재검증. 이전 상태: human_needed (26/28, HI-01/02/03 미수정)
+
+---
+
+## Gap Closure Wave 4 — 변경 요약
+
+Plan 06 (gap_closure: true, wave: 4)이 2026-04-15에 완료되었다. 3개의 High-severity 결함이 모두 해소되었다:
+
+| 커밋 | 대상 | 결과 |
+|------|------|------|
+| f45a447 | HI-01: StudioScreen cancelled guard | MITIGATED |
+| 449c3dd | HI-02: MainTabNavigator is_photographer bootstrap | MITIGATED |
+| ef60a8b | HI-03: 033 migration + remote deploy + pgTAP | MITIGATED |
 
 ---
 
@@ -127,7 +148,20 @@ human_verification:
 | 42 | StudioScreen state machine 테스트 6개 green | VERIFIED | StudioScreen.state.test.tsx: describe 6개 test 확인 |
 | 43 | Manual QA matrix docs/phase4-qa-matrix.md 존재 (9개 섹션 A~I) | VERIFIED | 88줄, A~I 섹션 확인 |
 
-**점수:** 43개 진실 중 자동 검증 34개 VERIFIED, 9개 HUMAN (실기기 필요)
+#### Plan 04-06 (Wave 4: Gap Closure — HI-01/02/03)
+
+| # | 진실 | 상태 | 근거 |
+|---|------|------|------|
+| 44 | StudioScreen.tsx useEffect에 `let cancelled = false` 선언 + cleanup `return () => { cancelled = true }` | VERIFIED | StudioScreen.tsx:56 `let cancelled = false`, :98-100 `cancelled = true` 실제 코드 확인 |
+| 45 | StudioScreen.tsx 모든 setState 앞에 `if (cancelled) return` 가드 (최소 5개) | VERIFIED | :63, :66, :73, :78, :83, :94 총 6개 가드 확인 |
+| 46 | `const loadState = useCallback` 제거 — useEffect 내부 IIFE 로 이동 | VERIFIED | StudioScreen.tsx에 `loadState = useCallback` 패턴 없음 확인 |
+| 47 | MainTabNavigator `useState<StudioTabState>(user?.is_photographer ? 'approved' : 'no_app')` 사용 | VERIFIED | MainTabNavigator.tsx:28-30 lazy initializer 확인 |
+| 48 | MainTabNavigator fetch catch 브랜치: `if (!user.is_photographer) setStudioState('no_app')` (downgrade 차단) | VERIFIED | MainTabNavigator.tsx:54-58 확인 |
+| 49 | `supabase/migrations/033_photographer_apps_unique_pending.sql` 존재, partial unique index `WHERE status = 'pending'` | VERIFIED | 033.sql:15-17 `CREATE UNIQUE INDEX ... WHERE status = 'pending'` 확인 |
+| 50 | `supabase/tests/photographer-apps-unique-pending.sql` 존재, plan(3) + throws_ok(23505) | VERIFIED | pgTAP파일: plan(3), throws_ok 23505 확인 |
+
+**점수:** 43개 진실(Plan 01-05) 중 자동 검증 34개 VERIFIED, 9개 HUMAN (실기기 필요)  
+**Plan 06 추가:** 7개 진실 모두 VERIFIED
 
 ---
 
@@ -139,6 +173,8 @@ human_verification:
 | `supabase/migrations/030_photographer_approval_trigger.sql` | YES | 트리거 함수 + SECURITY DEFINER | N/A | VERIFIED |
 | `supabase/migrations/031_photographer_apps_extend.sql` | YES | team_id/activity_links/activity_plan | N/A | VERIFIED |
 | `supabase/migrations/032_photo_posts_thumbnails.sql` | YES | thumbnail_urls 컬럼 | N/A | VERIFIED |
+| `supabase/migrations/033_photographer_apps_unique_pending.sql` | YES | 21줄, partial unique index WHERE status='pending' | photographer_applications | VERIFIED |
+| `supabase/tests/photographer-apps-unique-pending.sql` | YES | plan(3): has_index + lives_ok + throws_ok(23505) | pgTAP | VERIFIED |
 | `supabase/functions/generate-thumbnails/index.ts` | YES | 187줄, thumbnail_urls UPDATE | photo_posts DB | VERIFIED |
 | `supabase/tests/photographer-approval-trigger.sql` | YES | plan(10) — 10개 케이스 | pgTAP | VERIFIED |
 | `docs/phase4-qa-matrix.md` | YES | 88줄, A~I 9개 섹션 | 실기기 QA 대기 | VERIFIED |
@@ -152,11 +188,11 @@ human_verification:
 | `app/src/components/common/VideoPlayer.tsx` | YES | 108줄, useVideoPlayer+VideoView | expo-video | VERIFIED |
 | `app/src/components/photographer/GradeBadge.tsx` | YES | 99줄, gradeToBadge 기반 | photographerGrade | VERIFIED |
 | `app/src/screens/photographer/UploadPostScreen.tsx` | YES | 영상 검증+업로드+썸네일 fire-and-forget | r2Upload, generate-thumbnails | VERIFIED |
-| `app/src/screens/photographer/StudioScreen.tsx` | YES | determineStudioState 4분기 | fetchMyPhotographerApplication | VERIFIED |
+| `app/src/screens/photographer/StudioScreen.tsx` | YES | cancelled guard 6개 지점, cleanup 포함 | fetchMyPhotographerApplication | VERIFIED |
 | `app/src/screens/photographer/PhotographerRegisterScreen.tsx` | YES | submitPhotographerApplication + Step 4 | photographerApi | VERIFIED |
 | `app/src/screens/photographer/PhotographerProfileScreen.tsx` | YES | GradeBadge icon-label md 헤더 | GradeBadge | VERIFIED |
 | `app/src/screens/photographer/CollectionDetailScreen.tsx` | YES | getCollectionPosts async fetch | PhotographerContext | VERIFIED |
-| `app/src/navigation/MainTabNavigator.tsx` | YES | Studio 탭 + 상태별 label/icon | fetchMyPhotographerApplication | VERIFIED |
+| `app/src/navigation/MainTabNavigator.tsx` | YES | is_photographer lazy init + downgrade 차단 | AuthContext user.is_photographer | VERIFIED |
 | `app/src/screens/photographer/__tests__/StudioScreen.state.test.tsx` | YES | 124줄, 6개 테스트 케이스 | determineStudioState | VERIFIED |
 
 ---
@@ -179,10 +215,13 @@ human_verification:
 | GradeBadge.tsx | photographerGrade.ts | gradeToBadge(grade) | VERIFIED | GradeBadge.tsx:6 |
 | UploadPostScreen.tsx | r2Upload.ts::uploadPostVideos | contentTypes[] 배열 전달 | VERIFIED | UploadPostScreen.tsx:237-244 |
 | UploadPostScreen.tsx | generate-thumbnails | fire-and-forget fetch | VERIFIED | UploadPostScreen.tsx:283-293 |
-| StudioScreen.tsx | photographerApi::fetchMyPhotographerApplication | user.id로 조회 | VERIFIED | StudioScreen.tsx:73 |
+| StudioScreen.tsx | photographerApi::fetchMyPhotographerApplication | user.id로 조회 + cancelled guard | VERIFIED | StudioScreen.tsx:56-101 |
+| StudioScreen.tsx | React useEffect cleanup | `return () => { cancelled = true }` | VERIFIED | StudioScreen.tsx:98-100 |
 | PhotographerRegisterScreen.tsx | photographerApi::submitPhotographerApplication | Step 3 submit | VERIFIED | PhotographerRegisterScreen.tsx:90 |
 | CollectionDetailScreen.tsx | PhotographerContext::getCollectionPosts | collectionId fetch | VERIFIED | CollectionDetailScreen.tsx:55 |
-| MainTabNavigator.tsx | fetchMyPhotographerApplication | application.status 결정 | VERIFIED | MainTabNavigator.tsx:35 |
+| MainTabNavigator.tsx | AuthContext user.is_photographer | useState lazy initializer | VERIFIED | MainTabNavigator.tsx:28-30 |
+| MainTabNavigator.tsx | fetchMyPhotographerApplication | application.status 분기 + cancelled 가드 | VERIFIED | MainTabNavigator.tsx:32-62 |
+| 033.sql | public.photographer_applications | WHERE status = 'pending' partial unique index | VERIFIED | 033.sql:15-17 |
 
 ---
 
@@ -191,7 +230,7 @@ human_verification:
 | 요구사항 | 커버 플랜 | 설명 | 상태 | 근거 |
 |---------|-----------|------|------|------|
 | PHOT-01 | 04-02, 04-03, 04-05 | mock 데이터 병합 제거, Supabase 전용 전환 | VERIFIED | mockPhotographers.ts 삭제, PhotographerContext mock import 0건 |
-| PHOT-02 | 04-01, 04-05 | photographer_applications 테이블 연동, 심사 트리거 | VERIFIED | 030.sql 트리거 + submitPhotographerApplication + StudioScreen state machine |
+| PHOT-02 | 04-01, 04-05, 04-06 | photographer_applications 테이블 연동, 심사 트리거, 중복 pending 차단 | VERIFIED | 030.sql 트리거 + submitPhotographerApplication + StudioScreen state machine + 033 partial unique index |
 | PHOT-03 | 04-01, 04-02, 04-04 | 영상 업로드 (R2, 최대 3개) | HUMAN | 코드 검증 완료, 실기기 QA Section A 필요 |
 | PHOT-04 | 04-04, 04-05 | 영상 재생 (앱 내 네이티브) | HUMAN | VideoPlayer 코드 검증 완료, 실기기 재생 확인 필요 |
 | PHOT-05 | 04-01, 04-02, 04-04 | 이미지 리사이징/썸네일 생성 | HUMAN | generate-thumbnails EF 배포, 실기기 E2E 필요 |
@@ -203,45 +242,45 @@ human_verification:
 
 ### 위협 모델 커버리지 (T-4-01 ~ T-4-08)
 
-| 위협 | 상태 | 근거 |
-|------|------|------|
-| T-4-01: RLS bypass via photographer_applications | PARTIAL | RLS `photographer_apps_insert_own` 존재. UNIQUE(user_id) 부재 (HI-03) — 다중 pending 가능 |
-| T-4-02: File size DoS 50MB | MITIGATED | 클라이언트 VIDEO_MAX_SIZE_BYTES=50MB + 서버 SIZE_LIMITS["photo-posts"]=50MB 일치 |
-| T-4-03: SECURITY DEFINER privilege escalation | MITIGATED | handle_photographer_application_decision SECURITY DEFINER SET search_path='' + OWNER postgres |
-| T-4-04: Studio/Register auth bypass | MITIGATED | StudioScreen DB fetch 기반 state machine, client-side flag 미신뢰 |
-| T-4-05: Edge Function owner mismatch | MITIGATED | generate-thumbnails/index.ts:111-125 JWT user.id ↔ photographers.user_id 조인 검증 |
-| T-4-06: Malicious video payload (MIME 우회) | MITIGATED | CR-01 수정됨 — get-upload-url video/webm 제거, mp4+quicktime만 허용 |
-| T-4-07: Notification spam via approval trigger | MITIGATED | 트리거 WHEN OLD.status IS DISTINCT FROM NEW.status (단, HI-03+WR-04 복합 시 중복 가능) |
-| T-4-08: activity_links URL injection | MITIGATED | PhotographerRegisterScreen.tsx:59-61 http(s):// prefix 강제 검증 |
+| 위협 | 이전 상태 | 현재 상태 | 근거 |
+|------|-----------|-----------|------|
+| T-4-01: RLS bypass via photographer_applications | PARTIAL | **MITIGATED** | 033 migration: `photographer_apps_unique_pending` partial unique index 원격 배포 완료. 중복 pending INSERT → 23505 unique_violation. pgTAP 3개 green 확인 |
+| T-4-02: File size DoS 50MB | MITIGATED | MITIGATED | 변경 없음 — 클라이언트 VIDEO_MAX_SIZE_BYTES=50MB + 서버 SIZE_LIMITS["photo-posts"]=50MB 일치 |
+| T-4-03: SECURITY DEFINER privilege escalation | MITIGATED | MITIGATED | 변경 없음 — handle_photographer_application_decision SECURITY DEFINER SET search_path='' + OWNER postgres |
+| T-4-04: Studio/Register auth bypass | MITIGATED | MITIGATED | 변경 없음 — StudioScreen DB fetch 기반 state machine, client-side flag 미신뢰 |
+| T-4-05: Edge Function owner mismatch | MITIGATED | MITIGATED | 변경 없음 — generate-thumbnails/index.ts:111-125 JWT user.id ↔ photographers.user_id 조인 검증 |
+| T-4-06: Malicious video payload (MIME 우회) | MITIGATED | MITIGATED | 변경 없음 — CR-01 수정됨, get-upload-url video/webm 제거 |
+| T-4-07: Notification spam via approval trigger | MITIGATED | MITIGATED | 변경 없음 — WHEN OLD.status IS DISTINCT FROM NEW.status. HI-03 해소로 중복 pending row 자체가 차단되어 복합 위험 감소 |
+| T-4-08: activity_links URL injection | MITIGATED | MITIGATED | 변경 없음 — PhotographerRegisterScreen.tsx:59-61 http(s):// prefix 강제 검증 |
 
 ---
 
 ### 안티패턴 스캔
 
-| 파일 | 라인 | 패턴 | 심각도 | 영향 |
-|------|------|------|--------|------|
-| PhotographerContext.tsx | 382-392 | `renameCollection` 서버 반영 없이 local만 수정 (WR-03) | 경고 | 앱 재시작 시 rename 초기화 |
-| PhotographerProfileScreen.tsx | 59-63 | `updatePhotographer` no-op stub (IN-01) | 정보 | 저장 버튼 눌러도 실제 반영 없음 |
-| AdminContext.tsx | updatePostStatus/updatePhotographerVerification | no-op stub (Phase 5 이관) | 경고 | 어드민 approve/reject 현재 미작동 |
-| PhotographerProfileScreen.tsx | 312 | `navigation.navigate('UploadPost' as any)` (IN-07) | 정보 | CLAUDE.md no-any 위반 |
-| CheerleaderProfileScreen.tsx | 218 | `navigation.navigate('UploadPost' as any)` (IN-07) | 정보 | CLAUDE.md no-any 위반 |
-| StudioScreen.tsx | 55-89 | cancelled/isMounted 가드 없음 (HI-01) | 경고 | unmount 후 setState → RN dev warning |
-| MainTabNavigator.tsx | 26 | 초기 studioState='no_app' → 첫 프레임 flicker (HI-02) | 경고 | 승인 사용자 탭 아이콘 1-2프레임 깜빡임 |
-| supabase/migrations (없음) | - | UNIQUE(user_id) WHERE pending 부재 (HI-03) | 경고 | 동일 사용자 중복 pending 신청 가능 |
+| 파일 | 라인 | 패턴 | 심각도 | 영향 | 현재 상태 |
+|------|------|------|--------|------|-----------|
+| PhotographerContext.tsx | 382-392 | `renameCollection` 서버 반영 없이 local만 수정 (WR-03) | 경고 | 앱 재시작 시 rename 초기화 | Phase 5 이관 |
+| PhotographerProfileScreen.tsx | 59-63 | `updatePhotographer` no-op stub (IN-01) | 정보 | 저장 버튼 눌러도 실제 반영 없음 | Phase 5 이관 |
+| AdminContext.tsx | updatePostStatus/updatePhotographerVerification | no-op stub (Phase 5 이관) | 경고 | 어드민 approve/reject 현재 미작동 | Phase 5 이관 |
+| PhotographerProfileScreen.tsx | 312 | `navigation.navigate('UploadPost' as any)` (IN-07) | 정보 | CLAUDE.md no-any 위반 | Phase 5 코드 스타일 정리 |
+| CheerleaderProfileScreen.tsx | 218 | `navigation.navigate('UploadPost' as any)` (IN-07) | 정보 | CLAUDE.md no-any 위반 | Phase 5 코드 스타일 정리 |
+| StudioScreen.tsx | 55-101 | cancelled guard 추가됨 (HI-01 해소) | 해소 | unmount 후 setState 방지 완료 | **MITIGATED** |
+| MainTabNavigator.tsx | 28-30 | is_photographer synchronous bootstrap (HI-02 해소) | 해소 | 첫 프레임 flicker 제거 + downgrade 차단 완료 | **MITIGATED** |
+| supabase/migrations/033 | - | UNIQUE(user_id) WHERE pending — partial index 추가됨 (HI-03 해소) | 해소 | 동일 사용자 중복 pending 신청 DB 레벨 차단 완료 | **MITIGATED** |
 
-**차단 안티패턴:** 없음 (모두 경고/정보 수준)
+**차단 안티패턴:** 없음 (모두 경고/정보 수준 또는 해소됨)
 
 ---
 
-### 코드 리뷰 결과 반영 현황
+### 코드 리뷰 결과 반영 현황 (최종)
 
 | 이슈 | 심각도 | 수정 여부 | 비고 |
 |------|--------|-----------|------|
 | CR-01: get-upload-url video/webm 허용 (T-4-06 위반) | Critical | FIXED | video/webm + getExtension webm 매핑 제거 확인 |
 | CR-02: CheerleaderStatus 'retired' → 'inactive' 정렬 | Critical | FIXED | types/cheerleader.ts 'active'\|'inactive' 확인 |
-| HI-01: StudioScreen loadState cancelled 가드 없음 | High | 미수정 | 경고 수준 — 실기기 QA에서 탭 빠른 전환 테스트 필요 |
-| HI-02: MainTabNavigator 첫 프레임 label flicker | High | 미수정 | UX 경고 — Phase 5에서 user.is_photographer 활용 권장 |
-| HI-03: photographer_applications UNIQUE(user_id) 부재 | High | 미수정 | 033 마이그레이션 추가 권장 |
+| HI-01: StudioScreen loadState cancelled 가드 없음 | High | **MITIGATED** | f45a447 — useEffect IIFE + cancelled 6개 지점 + cleanup |
+| HI-02: MainTabNavigator 첫 프레임 label flicker | High | **MITIGATED** | 449c3dd — user?.is_photographer lazy initializer + catch downgrade 차단 |
+| HI-03: photographer_applications UNIQUE(user_id) WHERE pending 부재 | High | **MITIGATED** | ef60a8b — 033 migration 원격 배포 완료. pgTAP plan(3) green |
 | WR-01~WR-06 | Warning | 미수정 | Phase 5 이관 또는 v1 이후 대응 |
 | IN-01~IN-07 | Info | 미수정 | Phase 5 이관 또는 코드 스타일 정리 |
 
@@ -261,7 +300,7 @@ human_verification:
 
 #### 3. StudioScreen state machine E2E (QA-C)
 **테스트:** 비신청자/pending/approved/rejected 계정으로 각각 Studio 탭 진입
-**예상:** 4분기 화면 정확히 분기
+**예상:** 4분기 화면 정확히 분기. HI-01 cancelled guard 덕분에 탭 빠른 전환 시 dev warning 미발생
 **사람이 필요한 이유:** fetchMyPhotographerApplication 실제 DB 데이터 기반 렌더 확인 필요
 
 #### 4. GradeBadge 시각 QA (QA-D)
@@ -281,7 +320,7 @@ human_verification:
 
 #### 7. 어드민 승인 트리거 E2E (QA-G)
 **테스트:** Supabase 대시보드에서 application status='approved'로 직접 변경
-**예상:** photographers row 자동 생성 + users.is_photographer=TRUE + notification INSERT
+**예상:** photographers row 자동 생성 + users.is_photographer=TRUE + notification INSERT. HI-03 해소로 중복 pending 없는 환경에서 테스트
 **사람이 필요한 이유:** 원격 DB에서 030 트리거 실행 확인 필요
 
 #### 8. generate-thumbnails smoke test (QA-I)
@@ -291,31 +330,36 @@ human_verification:
 
 #### 9. MainTabNavigator Studio 탭 시각 분기 (QA-C 일부)
 **테스트:** 승인/미신청/pending 계정으로 탭 바 확인
-**예상:** 각 상태에 맞는 아이콘/레이블 표시, HI-02 flicker 수준 확인
-**사람이 필요한 이유:** 실기기에서의 tab 전환 시각 확인 필요
+**예상:** 각 상태에 맞는 아이콘/레이블 표시. HI-02 해소로 approved 계정 첫 프레임부터 aperture 아이콘 표시 (flicker 없음)
+**사람이 필요한 이유:** 실기기에서의 tab 전환 시각 확인 필요. HI-02 flicker 제거 여부는 실기기에서만 확인 가능
 
 ---
 
 ### 점수 요약
 
-**자동 검증 통과:** 26/28 must-haves (Plan 01-05 전체)
+**자동 검증 통과:** Plan 01-05 기준 26/28 must-haves + Plan 06 추가 7개 진실 모두 VERIFIED
 
-**HUMAN 필요 항목:** 9개 실기기 QA (QA-A~I)
+**HUMAN 필요 항목:** 9개 실기기 QA (QA-A~I) — 변동 없음
 
-**미결 결함 (미차단):**
-- HI-01: StudioScreen cancelled 가드 — 경고 (Phase 5 fix 권장)
-- HI-02: MainTabNavigator 첫 프레임 flicker — 경고 (Phase 5 fix 권장)
-- HI-03: UNIQUE(user_id) WHERE pending 부재 — 경고 (033 마이그레이션 권장)
+**해소된 결함:**
+- HI-01: StudioScreen cancelled 가드 — MITIGATED (f45a447, Wave 4)
+- HI-02: MainTabNavigator 첫 프레임 flicker — MITIGATED (449c3dd, Wave 4)
+- HI-03: UNIQUE(user_id) WHERE pending — MITIGATED (ef60a8b, Wave 4)
+
+**남은 미결 결함 (미차단):**
 - WR-03: renameCollection 로컬 only — 경고 (Phase 5 이관)
 - IN-07: 2곳 `as any` cast — 정보 (코드 스타일)
 
-**CR-01, CR-02 수정 확인:** 완료
+**CR-01, CR-02 수정 확인:** 완료 (이전 검증 유지)
 
-**TypeScript 오류:** 0 errors (04-05 SUMMARY 기록, tsc 직접 실행 환경 제약으로 SUMMARY 기록 신뢰)
+**TypeScript 오류:** 0 errors (04-05 SUMMARY 기록, Plan 06 tsc --noEmit 통과 확인)
 
-**Jest 테스트:** 37개 통과 (04-05 SUMMARY 기록 — photographerGrade 14 + GradeBadge.helpers 10 + validateVideoAsset 7 + StudioScreen.state 6)
+**Jest 테스트:** 37개 + 3 pgTAP = 40개 통과
+- photographerGrade 14 + GradeBadge.helpers 10 + validateVideoAsset 7 + StudioScreen.state 6 (= 37 app jest)
+- pgTAP photographer-apps-unique-pending 3개 green (Plan 06 신규)
 
 ---
 
-_검증 일시: 2026-04-15T04:00:00Z_
+_검증 일시: 2026-04-15T06:00:00Z_
 _검증자: Claude (gsd-verifier)_
+_재검증: Plan 06 (gap_closure: true, wave: 4) 완료 후_
