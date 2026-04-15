@@ -39,6 +39,8 @@ const lightColors = {
   verified: '#22C55E',           // Verified/HQ badge
   star: '#FACC15',               // Ratings
   featuredAccent: '#D97706',     // Featured/best cut tag text (amber)
+  // UI-SPEC §Color: bronze 는 Phase 4 의 유일한 신규 hex (GradeBadge tier 브론즈 시그니파이어)
+  bronze: '#A97142',             // Photographer bronze grade
 
   // Active/Highlight
   activeLight: '#FFF0F0',         // Light tint for active category/filter
@@ -118,6 +120,7 @@ const _darkColors: ColorScheme = {
   verified: '#22C55E',
   star: '#FACC15',
   featuredAccent: '#F59E0B',
+  bronze: '#A97142',
 
   // Active/Highlight
   activeLight: '#2A1515',
