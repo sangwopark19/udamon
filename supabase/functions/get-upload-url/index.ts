@@ -16,7 +16,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 };
 
 const SIZE_LIMITS: Record<string, number> = {
-  "photo-posts": 30 * 1024 * 1024,
+  "photo-posts": 50 * 1024 * 1024,  // v1: 이미지 30MB / 영상 50MB 허용 (영상 최대값 기준 — Phase 4 T-4-02)
   "community-posts": 10 * 1024 * 1024,
   avatars: 5 * 1024 * 1024,
 };
