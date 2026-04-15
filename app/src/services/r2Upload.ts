@@ -87,25 +87,29 @@ export async function uploadPostImages(
   }
 }
 
+// ADJ-02: asset 별로 contentType (video/mp4 또는 video/quicktime) 을 동적으로 받음.
+// localUris 와 contentTypes 는 1:1 대응 길이여야 하며, 각 asset 별로 별도의
+// get-upload-url 호출이 발생한다 (Edge Function 이 호출당 단일 contentType + count 가정).
 export async function uploadPostVideos(
   userId: string,
   localUris: string[],
   accessToken: string,
-  contentType = 'video/mp4',
+  contentTypes: string[],
 ): Promise<UploadResult> {
   try {
-    const { uploads } = await getPresignedUrls(
-      accessToken,
-      'photo-posts',
-      contentType,
-      localUris.length,
-    );
-
+    if (contentTypes.length !== localUris.length) {
+      return { data: null, error: 'contentTypes length must match localUris length' };
+    }
     const publicUrls: string[] = [];
 
     for (let i = 0; i < localUris.length; i++) {
-      await putToR2(uploads[i].uploadUrl, localUris[i], contentType);
-      publicUrls.push(uploads[i].publicUrl);
+      const contentType = contentTypes[i];
+      if (contentType !== 'video/mp4' && contentType !== 'video/quicktime') {
+        return { data: null, error: `Unsupported video mime: ${contentType}` };
+      }
+      const { uploads } = await getPresignedUrls(accessToken, 'photo-posts', contentType, 1);
+      await putToR2(uploads[0].uploadUrl, localUris[i], contentType);
+      publicUrls.push(uploads[0].publicUrl);
     }
 
     return { data: publicUrls, error: null };
