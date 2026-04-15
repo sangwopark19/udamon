@@ -18,10 +18,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { usePhotographer } from '../../contexts/PhotographerContext';
+import * as photographerApi from '../../services/photographerApi';
 import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
-import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Step = 1 | 2 | 3 | 4;
@@ -33,8 +33,7 @@ export default function PhotographerRegisterScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
-  const { user, activatePhotographerMode } = useAuth();
-  const { registerPhotographer } = usePhotographer();
+  const { user } = useAuth();
 
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
@@ -73,6 +72,14 @@ export default function PhotographerRegisterScreen() {
     setError('');
     if (step === 1) {
       if (!selectedTeamId) return;
+      // T-4-08: 활동 내역 링크 각 항목이 http(s) prefix 를 만족하는지 제출 시점 재검증
+      const invalidLinks = activityLinks.filter(
+        (link) => link.trim() !== '' && !/^https?:\/\//i.test(link.trim()),
+      );
+      if (invalidLinks.length > 0) {
+        Alert.alert(t('pg_register_url_error_title'), t('pg_register_url_error_msg'));
+        return;
+      }
       setStep(2);
     } else if (step === 2) {
       if (!termsAgreed || !copyrightPolicyAgreed) return;
@@ -80,25 +87,20 @@ export default function PhotographerRegisterScreen() {
     } else if (step === 3) {
       if (!copyrightConfirmed || !selectedTeamId || !user) return;
       setLoading(true);
-      const result = await activatePhotographerMode(selectedTeamId);
+      const res = await photographerApi.submitPhotographerApplication({
+        user_id: user.id,
+        team_slug: selectedTeamId,
+        activity_links: activityLinks.map((s) => s.trim()).filter(Boolean),
+        activity_plan: activityPlan.trim(),
+        portfolio_url: null,
+        bio: '',
+      });
       setLoading(false);
-      if (!result.success) {
-        setError(result.error ?? t('pg_register_fail'));
+      if (res.error) {
+        Alert.alert(t('pg_register_fail'), t('pg_register_fail_desc'));
+        setError(res.error);
         return;
       }
-      registerPhotographer({
-        id: user.id,
-        user_id: user.id,
-        display_name: user.display_name || user.username || t('pg_default_name'),
-        bio: '',
-        avatar_url: user.avatar_url,
-        cover_url: null,
-        team_id: selectedTeamId,
-        follower_count: 0,
-        post_count: 0,
-        is_verified: false,
-        created_at: new Date().toISOString(),
-      });
       setStep(4);
     }
   };
@@ -119,7 +121,7 @@ export default function PhotographerRegisterScreen() {
   const getButtonLabel = () => {
     if (step === 1) return t('btn_next');
     if (step === 2) return t('btn_next');
-    return t('pg_register_confirm_submit');
+    return t('pg_register_submit');
   };
 
   const stepLabels = [t('pg_register_step1_label'), t('pg_register_step2_label'), t('pg_register_step3_label')];
@@ -362,20 +364,19 @@ export default function PhotographerRegisterScreen() {
             </View>
           )}
 
-          {/* ── Step 4: Complete ── */}
+          {/* ── Step 4: Pending review (UI-SPEC §PhotographerRegisterScreen Step 4) ── */}
           {step === 4 && (
-            <View style={styles.completeWrap}>
-              <View style={styles.completeIcon}>
-                <Ionicons name="checkmark-circle" size={64} color={colors.success} />
-              </View>
-              <Text style={styles.completeTitle}>{t('pg_register_complete_title')}</Text>
-              <Text style={styles.completeDesc}>{t('pg_register_complete_desc')}</Text>
+            <View style={styles.pendingWrap}>
+              <Ionicons name="time-outline" size={64} color={colors.warning} />
+              <Text style={styles.pendingTitle}>{t('pg_register_pending_title')}</Text>
+              <Text style={styles.pendingDesc}>{t('pg_register_pending_desc')}</Text>
               <TouchableOpacity
-                style={styles.startBtn}
-                activeOpacity={0.8}
+                style={styles.pendingCta}
+                activeOpacity={0.7}
                 onPress={() => navigation.goBack()}
+                accessibilityLabel={t('pg_register_pending_go_home')}
               >
-                <Text style={styles.startBtnText}>{t('pg_register_btn_start')}</Text>
+                <Text style={styles.pendingCtaLabel}>{t('pg_register_pending_go_home')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -531,17 +532,44 @@ const styles = StyleSheet.create({
   requiredBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   requiredText: { fontSize: fontSize.micro, fontWeight: fontWeight.body, color: colors.error },
 
-  // Complete
-  completeWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, gap: 12 },
-  completeIcon: { marginBottom: 8 },
-  completeTitle: { fontSize: fontSize.display, fontWeight: fontWeight.heading, color: colors.textPrimary },
-  completeDesc: { fontSize: fontSize.body, fontWeight: fontWeight.body, color: colors.textSecondary, textAlign: 'center', lineHeight: 22 },
-  startBtn: {
-    height: 52, paddingHorizontal: 48,
-    backgroundColor: colors.primary, borderRadius: radius.lg,
-    justifyContent: 'center', alignItems: 'center', marginTop: 20,
+  // Pending (Step 4 redesign — UI-SPEC §PhotographerRegisterScreen)
+  pendingWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: spacing.xxl,
+    paddingHorizontal: 24,
   },
-  startBtnText: { fontSize: fontSize.cardName, fontWeight: fontWeight.name, color: colors.buttonPrimaryText },
+  pendingTitle: {
+    fontSize: fontSize.sectionTitle,
+    fontWeight: fontWeight.heading,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+  },
+  pendingDesc: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 320,
+    marginTop: spacing.md,
+  },
+  pendingCta: {
+    height: 48,
+    alignSelf: 'stretch',
+    backgroundColor: colors.primary,
+    borderRadius: radius.button,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.xxl,
+  },
+  pendingCtaLabel: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.body,
+    color: colors.buttonPrimaryText,
+  },
 
   // Error
   errorText: { fontSize: fontSize.micro, fontWeight: fontWeight.body, color: colors.error, textAlign: 'center', marginTop: 12 },
