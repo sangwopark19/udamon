@@ -14,6 +14,7 @@ updated: 2026-04-15T03:34:02Z
 
 본 UAT는 Phase 4 자동 검증 완료 후 남은 **실기기 QA 매트릭스 9개 섹션**입니다.
 상세 체크리스트: `docs/phase4-qa-matrix.md` (Section A~I)
+**시작 전 필수**: `docs/phase4-qa-matrix.md` 의 "사전 준비" 섹션 전수 확인 (EAS dev build 재생성 누락 시 전 Test 가 blocked 됨 — 2026-04-15 UAT blocker 실사례)
 
 ### 1. 영상 업로드 iOS/Android 실기기 QA (Section A)
 expected: UploadPostScreen에서 video/mp4, video/quicktime 허용 / .avi·.mkv 차단 / 30초 초과 Alert / 50MB 초과 Alert / 3개 max

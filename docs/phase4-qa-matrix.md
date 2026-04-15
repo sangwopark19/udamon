@@ -4,6 +4,22 @@
 > 작성: Plan 04-01 (2026-04-15)
 > Target: EAS development 빌드 (iOS + Android)
 
+## 사전 준비 (QA 세션 시작 전 필수)
+
+> 2026-04-15 UAT Test 1 blocker 재발 방지 — Phase 4 Plan 01 에서 `expo-video ~3.0.16` native 의존성 추가 이후 EAS dev build 재생성 없이 Expo Go / 구 dev client 로 실행하여 "Cannot find native module 'ExpoVideo'" RED screen 크래시 발생.
+
+- [ ] `ls app/ios app/android` 실행 → 둘 다 부재 확인 (managed workflow / CNG 사용 중)
+- [ ] `eas whoami` → EAS 계정 로그인 확인, 미로그인 시 `eas login`
+- [ ] **신규 native 모듈이 이번 Phase 에 추가되었는지 확인** (아래 중 하나라도 해당):
+  - `app/package.json` 의 `expo-*` / `react-native-*` / `@react-native-*` / 네이티브 SDK 패키지가 신규 추가됨
+  - `app/app.json` 의 `plugins` 배열에 신규 플러그인 등록됨
+  - 이전 빌드와 다른 환경 설정 (env vars 아닌 app config) 변경됨
+- [ ] 위 중 하나라도 해당 → `cd app && eas build --profile development --platform android --non-interactive` 실행 (15~25분)
+- [ ] 병렬: `cd app && eas build --profile development --platform ios --non-interactive`
+- [ ] 빌드 완료 후 `eas build:run --platform android --profile development` + `--platform ios` 로 시뮬레이터 install
+- [ ] `cd app && npx expo start --dev-client` 로 연결 → 앱이 RED screen 없이 부팅하면 QA 매트릭스 시작 가능
+- [ ] 프로토콜 상세: `docs/dev-environment-setup.md` 참조
+
 ## A. 영상 업로드 (PHOT-03, T-4-02/06)
 
 - [ ] iOS 16+: 갤러리에서 25초 H.264 MOV 영상 선택 → Alert 없음 → 업로드 성공 → 피드 썸네일 + 재생 OK
