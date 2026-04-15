@@ -5,7 +5,7 @@
 -- ============================================================
 
 BEGIN;
-SELECT plan(9);
+SELECT plan(10);
 
 -- Setup (auth.users INSERT → handle_new_user 트리거가 public.users 자동 생성)
 INSERT INTO auth.users (id, email) VALUES ('11111111-1111-1111-1111-111111111111', 'pg-test@example.com');
