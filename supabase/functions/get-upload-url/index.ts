@@ -9,7 +9,6 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     "image/webp",
     "video/mp4",
     "video/quicktime",
-    "video/webm",
   ],
   "community-posts": ["image/jpeg", "image/png", "image/webp"],
   avatars: ["image/jpeg", "image/png", "image/webp"],
@@ -69,7 +68,6 @@ function getExtension(contentType: string): string {
     "image/webp": "webp",
     "video/mp4": "mp4",
     "video/quicktime": "mov",
-    "video/webm": "webm",
   };
   return map[contentType] ?? "bin";
 }

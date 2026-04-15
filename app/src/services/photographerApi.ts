@@ -107,7 +107,7 @@ interface CheerleaderRow {
   name_ko: string;
   name_en: string | null;
   position: 'leader' | 'member';
-  status: 'active' | 'retired';
+  status: 'active' | 'inactive';
   image_url: string | null;
 }
 
