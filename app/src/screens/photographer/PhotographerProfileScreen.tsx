@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Image,
   TouchableOpacity,
   Animated,
@@ -12,6 +13,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,6 +35,7 @@ import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 import { formatCount } from '../../utils/time';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'PhotographerProfile'>;
@@ -76,6 +79,17 @@ export default function PhotographerProfileScreen() {
   const [newColEmoji, setNewColEmoji] = useState(COLLECTION_EMOJIS[0]);
   const visiblePosts = posts.slice(0, visibleCount);
   const hasMore = visibleCount < posts.length;
+
+  // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
+  const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const indices = new Set<number>();
+    viewableItems.forEach((vt) => {
+      if (typeof vt.index === 'number') indices.add(vt.index);
+    });
+    setVisibleIndices(indices);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const pgCollections = useMemo(() => getCollectionsForPg(photographerId), [photographerId, getCollectionsForPg]);
 
@@ -446,27 +460,41 @@ export default function PhotographerProfileScreen() {
             <Text style={styles.emptyPostsText}>{t('empty_no_posts')}</Text>
           </View>
         ) : (
-          <View style={styles.postGrid}>
-            {visiblePosts.map((post) => {
+          <FlatList
+            data={visiblePosts}
+            keyExtractor={(item) => item.id}
+            numColumns={GRID_COLS}
+            scrollEnabled={false}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            columnWrapperStyle={{ gap: GRID_GAP }}
+            contentContainerStyle={{ gap: GRID_GAP }}
+            renderItem={({ item: post, index }) => {
               const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
               const hasVideo = (post.videos?.length ?? 0) > 0;
+              const videoUri = post.videos?.[0];
+              const isVisible = visibleIndices.has(index);
               return (
                 <TouchableOpacity
-                  key={post.id}
                   style={styles.postThumb}
                   activeOpacity={0.85}
                   onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
                 >
-                  {previewUri ? (
+                  {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+                  {hasVideo && videoUri ? (
+                    <VideoPlayer
+                      uri={videoUri}
+                      mode="feed"
+                      width={THUMB_SIZE}
+                      height={THUMB_SIZE}
+                      isVisible={isVisible}
+                    />
+                  ) : previewUri ? (
                     <Image source={{ uri: previewUri }} style={styles.postThumbImage} />
                   ) : (
                     <View style={[styles.postThumbImage, { backgroundColor: colors.surface }]} />
                   )}
-                  {hasVideo && (
-                    <View style={styles.videoPlayOverlay}>
-                      <Ionicons name="play" size={12} color="#FFFFFF" />
-                    </View>
-                  )}
+                  {/* videoPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
                   {post.images.length > 1 && !hasVideo && (
                     <View style={styles.multiIcon}>
                       <Ionicons name="copy-outline" size={12} color="#FFFFFF" />
@@ -485,8 +513,8 @@ export default function PhotographerProfileScreen() {
                   </View>
                 </TouchableOpacity>
               );
-            })}
-          </View>
+            }}
+          />
         )}
 
         {hasMore && (

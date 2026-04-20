@@ -72,6 +72,19 @@ export default function HomeScreen() {
   }).current;
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
+  // Plan 04-10 Sub-issue B: featured 가로 캐러셀 전용 viewport tracking — id 기반 (horizontal index 보다 안전)
+  const [featuredVisibleIds, setFeaturedVisibleIds] = useState<Set<string>>(new Set());
+  const onFeaturedViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const ids = new Set<string>();
+    viewableItems.forEach((vt) => {
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
+    });
+    setFeaturedVisibleIds(ids);
+  }).current;
+  const featuredViewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
   const myTeamId = user?.my_team_id ?? null;
   const myTeam = myTeamId ? KBO_TEAMS.find((t) => t.id === myTeamId) : null;
   const refreshColor = myTeam?.color ?? colors.primary;
@@ -201,32 +214,41 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <FlatList
+              data={featured}
+              keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.featuredScroll}
-            >
-              {featured.map((post) => {
+              onViewableItemsChanged={onFeaturedViewableItemsChanged}
+              viewabilityConfig={featuredViewabilityConfig}
+              renderItem={({ item: post }) => {
                 const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
                 const hasVideo = (post.videos?.length ?? 0) > 0;
+                const videoUri = post.videos?.[0];
+                const isVisible = featuredVisibleIds.has(post.id);
                 return (
                   <TouchableOpacity
-                    key={post.id}
                     style={styles.featuredCard}
                     activeOpacity={0.85}
                     onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
                   >
                     <View style={styles.featuredImageWrap}>
-                      {previewUri ? (
+                      {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+                      {hasVideo && videoUri ? (
+                        <VideoPlayer
+                          uri={videoUri}
+                          mode="feed"
+                          width={FEATURED_CARD_WIDTH}
+                          height={FEATURED_CARD_WIDTH * (4 / 3)}
+                          isVisible={isVisible}
+                        />
+                      ) : previewUri ? (
                         <Image source={{ uri: previewUri }} style={styles.featuredImage} />
                       ) : (
                         <View style={[styles.featuredImage, { backgroundColor: colors.surface }]} />
                       )}
-                      {hasVideo && (
-                        <View style={styles.featuredPlayOverlay}>
-                          <Ionicons name="play" size={16} color="#FFFFFF" />
-                        </View>
-                      )}
+                      {/* featuredPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
                       <LinearGradient
                         colors={['transparent', 'rgba(0,0,0,0.8)']}
                         locations={[0.4, 1]}
@@ -248,8 +270,8 @@ export default function HomeScreen() {
                     </View>
                   </TouchableOpacity>
                 );
-              })}
-            </ScrollView>
+              }}
+            />
           </>
         )}
 

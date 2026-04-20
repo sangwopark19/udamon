@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +22,7 @@ import { formatCount } from '../../utils/time';
 import type { PhotoPost } from '../../types/photographer';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type SortMode = 'popular' | 'latest' | 'likes' | 'comments';
@@ -38,6 +40,17 @@ export default function AllPostsScreen() {
   const [sortMode, setSortMode] = useState<SortMode>('popular');
   const [showDropdown, setShowDropdown] = useState(false);
 
+  // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
+  const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const indices = new Set<number>();
+    viewableItems.forEach((vt) => {
+      if (typeof vt.index === 'number') indices.add(vt.index);
+    });
+    setVisibleIndices(indices);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
   const sortedPosts = useMemo(() => {
     const copy = [...photoPosts];
     switch (sortMode) {
@@ -52,10 +65,12 @@ export default function AllPostsScreen() {
     }
   }, [photoPosts, sortMode]);
 
-  const renderPost = ({ item: post }: { item: PhotoPost }) => {
+  const renderPost = ({ item: post, index }: { item: PhotoPost; index: number }) => {
     const td = KBO_TEAMS.find((t) => t.id === post.team_id);
     const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
     const hasVideo = (post.videos?.length ?? 0) > 0;
+    const videoUri = post.videos?.[0];
+    const isVisible = visibleIndices.has(index);
     return (
       <TouchableOpacity
         style={styles.card}
@@ -63,16 +78,21 @@ export default function AllPostsScreen() {
         onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
       >
         <View style={styles.imageWrap}>
-          {previewUri ? (
+          {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+          {hasVideo && videoUri ? (
+            <VideoPlayer
+              uri={videoUri}
+              mode="feed"
+              width={CARD_WIDTH}
+              height={(CARD_WIDTH * 5) / 4}
+              isVisible={isVisible}
+            />
+          ) : previewUri ? (
             <Image source={{ uri: previewUri }} style={styles.image} />
           ) : (
             <View style={[styles.image, { backgroundColor: colors.surface }]} />
           )}
-          {hasVideo && (
-            <View style={styles.videoPlayOverlay}>
-              <Ionicons name="play" size={14} color="#FFFFFF" />
-            </View>
-          )}
+          {/* videoPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             locations={[0.3, 1]}
@@ -160,6 +180,8 @@ export default function AllPostsScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={[styles.listContent, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
         showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
       />
     </View>
   );
