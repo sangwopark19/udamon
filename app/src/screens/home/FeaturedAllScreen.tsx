@@ -53,36 +53,49 @@ export default function FeaturedAllScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>
-          {featured.map((post) => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.card}
-              activeOpacity={0.85}
-              onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-            >
-              <View style={styles.imageWrap}>
-                <Image source={{ uri: post.images[0] }} style={styles.image} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  locations={[0.4, 1]}
-                  style={styles.gradient}
-                />
-                <View style={styles.tag}>
-                  <Text style={styles.tagText}>📸 {t('home_featured_tag')}</Text>
-                </View>
-                <View style={styles.bottom}>
-                  <Text style={styles.postTitle} numberOfLines={1}>{post.title}</Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.photographer}>@{post.photographer.display_name}</Text>
-                    <View style={styles.likes}>
-                      <Ionicons name="heart" size={10} color={colors.error} />
-                      <Text style={styles.likesText}>{formatCount(post.like_count)}</Text>
+          {featured.map((post) => {
+            const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+            const hasVideo = (post.videos?.length ?? 0) > 0;
+            return (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.card}
+                activeOpacity={0.85}
+                onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+              >
+                <View style={styles.imageWrap}>
+                  {previewUri ? (
+                    <Image source={{ uri: previewUri }} style={styles.image} />
+                  ) : (
+                    <View style={[styles.image, { backgroundColor: colors.surface }]} />
+                  )}
+                  {hasVideo && (
+                    <View style={styles.videoPlayOverlay}>
+                      <Ionicons name="play" size={14} color="#FFFFFF" />
+                    </View>
+                  )}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.8)']}
+                    locations={[0.4, 1]}
+                    style={styles.gradient}
+                  />
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>📸 {t('home_featured_tag')}</Text>
+                  </View>
+                  <View style={styles.bottom}>
+                    <Text style={styles.postTitle} numberOfLines={1}>{post.title}</Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.photographer}>@{post.photographer.display_name}</Text>
+                      <View style={styles.likes}>
+                        <Ionicons name="heart" size={10} color={colors.error} />
+                        <Text style={styles.likesText}>{formatCount(post.like_count)}</Text>
+                      </View>
                     </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {featured.length === 0 && (
@@ -132,6 +145,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  videoPlayOverlay: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
+  },
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
   tag: {
     position: 'absolute', top: 8, left: 8,

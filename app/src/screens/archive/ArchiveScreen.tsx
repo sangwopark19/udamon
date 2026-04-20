@@ -174,6 +174,8 @@ export default function ArchiveScreen() {
     <View style={styles.imageGrid}>
       {posts.map((post) => {
         if (!post) return null;
+        const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+        const hasVideo = (post.videos?.length ?? 0) > 0;
         return (
           <TouchableOpacity
             key={post.id}
@@ -182,8 +184,17 @@ export default function ArchiveScreen() {
             onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
             onLongPress={allowLongPress ? () => handlePostLongPress(post.id) : undefined}
           >
-            <Image source={{ uri: post.images[0] }} style={styles.gridImage} />
-            {post.images.length > 1 && (
+            {previewUri ? (
+              <Image source={{ uri: previewUri }} style={styles.gridImage} />
+            ) : (
+              <View style={[styles.gridImage, { backgroundColor: colors.surface }]} />
+            )}
+            {hasVideo && (
+              <View style={styles.videoPlayOverlay}>
+                <Ionicons name="play" size={12} color="#FFFFFF" />
+              </View>
+            )}
+            {post.images.length > 1 && !hasVideo && (
               <View style={styles.gridMediaBadge}>
                 <Ionicons name="copy-outline" size={10} color="#FFF" />
                 <Text style={styles.gridMediaText}>{post.images.length}</Text>
@@ -607,6 +618,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  videoPlayOverlay: {
+    position: 'absolute', top: 6, right: 6,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
   },
   gridMediaText: {
     fontSize: fontSize.micro2,
