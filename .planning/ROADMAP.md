@@ -85,7 +85,7 @@ Plans:
   2. 포토그래퍼 신청을 제출하면 어드민 심사 대기 상태가 되고, 승인/거절 결과가 반영된다
   3. 영상을 최대 3개 업로드할 수 있고, 앱 내에서 네이티브 재생이 가능하다
   4. 포토그래퍼 프로필에 등급(포스트 수 + 팔로워 기반)이 표시되고, 치어리더 태깅이 동작한다
-**Plans**: 9 plans (5 initial + 4 gap closure)
+**Plans**: 10 plans (5 initial + 5 gap closure)
 **UI hint**: yes
 
 Plans:
@@ -98,6 +98,7 @@ Plans:
 - [x] 04-07-PLAN.md — Wave 5 (gap closure): expo-video native module blocker 해소 — EAS dev build 재생성 + 시뮬레이터 install + fresh start 검증 [BLOCKING user checkpoint] + docs/dev-environment-setup.md native-rebuild 프로토콜 + phase4-qa-matrix.md / 04-HUMAN-UAT.md 사전 준비 체크리스트 보강
 - [x] 04-08-PLAN.md — Wave 6 (gap closure): UAT Test 4 해소 — PhotographerContext 에 myApplication state + submitPhotographerApplication wrapper + refreshMyApplication 추가 → PhotographerRegisterScreen / MainTabNavigator / StudioScreen 이 Context 구독으로 전환되어 신청 제출 직후 Studio 탭 label/icon 실시간 전환
 - [x] 04-09-PLAN.md — Wave 6 (gap closure): UAT Test 11/12/13 해소 — PostDetailScreen hero 가 images+videos 통합 media 배열을 Image / VideoPlayer(mode='detail') 분기 렌더 + HomeScreen trending 그리드 FlatList + viewport-aware VideoPlayer(mode='feed') + AllPosts/FeaturedAll/PhotographerProfile/Archive 카드 play overlay + thumbnail_urls fallback
+- [ ] 04-10-PLAN.md — Wave 7 (gap closure): UAT Test 12 재개 — UploadPostScreen 영상-only submit 허용 (canPublish OR 조건 + doPublish image skip + handleClose dirty-check) + 5 피드 surface (HomeScreen featured / AllPosts / FeaturedAll / PhotographerProfile / Archive) 에 trending 패턴 복제 VideoPlayer(mode='feed', isVisible) + StudioScreen/CollectionDetailScreen 영상-only fallback poster (mode='studio')
 
 ### Phase 5: Admin
 **Goal**: 관리자가 어드민 웹에서 사용자, 커뮤니티, 포토그래퍼, 공지사항을 실제 데이터로 관리할 수 있는 상태
