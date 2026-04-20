@@ -90,10 +90,12 @@ export default function UploadPostScreen() {
     [selectedTeamId, getCheerleadersByTeam],
   );
 
+  // Plan 04-10 Sub-issue A: 영상-only 포스트 허용 (UI-SPEC §UploadPostScreen line 157 '동영상 (선택)', line 381 'video-only edge case' 명시적 허용).
+  // DB/server 수용 확인됨 (07/029 migrations, createPhotoPost).
   const canPublish =
     title.trim().length > 0 &&
     selectedTeamId !== null &&
-    images.length > 0 &&
+    (images.length > 0 || videos.length > 0) &&
     (isEditing || rightsConfirmed);
 
   const handleAddMedia = async () => {
@@ -221,15 +223,20 @@ export default function UploadPostScreen() {
     setUploading(true);
     try {
       // Step 1: optimize + upload images (Phase 3 D-09)
-      const optimized = await Promise.all(images.map(optimizeImage));
-      const imageUpload = await photographerApi.uploadPostImages(user.id, optimized, session.access_token);
-      if (imageUpload.error || !imageUpload.data) {
-        Alert.alert(
-          t('upload_video_upload_failed_title'),
-          imageUpload.error ?? t('upload_video_upload_failed_desc'),
-        );
-        setUploading(false);
-        return;
+      // Plan 04-10 Sub-issue A: images=[] (영상-only) 면 uploadPostImages 스킵 — get-upload-url count=0 400 회피 + finalImages=[] 로 createPhotoPost 에 전달.
+      let finalImages: string[] = [];
+      if (images.length > 0) {
+        const optimized = await Promise.all(images.map(optimizeImage));
+        const imageUpload = await photographerApi.uploadPostImages(user.id, optimized, session.access_token);
+        if (imageUpload.error || !imageUpload.data) {
+          Alert.alert(
+            t('upload_video_upload_failed_title'),
+            imageUpload.error ?? t('upload_video_upload_failed_desc'),
+          );
+          setUploading(false);
+          return;
+        }
+        finalImages = imageUpload.data;
       }
 
       // Step 2: upload videos (D-04, ADJ-02 contentTypes)
@@ -260,7 +267,7 @@ export default function UploadPostScreen() {
         cheerleaderId: selectedCheerleaderId,
         title: title.trim(),
         description: description.trim(),
-        images: imageUpload.data,
+        images: finalImages,
         videos: finalVideos,
       });
       if (postResult.error || !postResult.data) {
@@ -279,7 +286,7 @@ export default function UploadPostScreen() {
 
       // Step 4: generate-thumbnails fire-and-forget (D-14)
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-      if (supabaseUrl && imageUpload.data.length > 0) {
+      if (supabaseUrl && finalImages.length > 0) {
         fetch(`${supabaseUrl}/functions/v1/generate-thumbnails`, {
           method: 'POST',
           headers: {
@@ -288,7 +295,7 @@ export default function UploadPostScreen() {
           },
           body: JSON.stringify({
             postId: postResult.data.id,
-            imageUrls: imageUpload.data,
+            imageUrls: finalImages,
           }),
         }).catch((e) => console.warn('[Thumbnail] fire-and-forget failed', e));
       }
@@ -314,7 +321,8 @@ export default function UploadPostScreen() {
   };
 
   const handleClose = () => {
-    if (title || description || images.length > 0) {
+    // Plan 04-10 Sub-issue A side-fix: videos.length 도 dirty 판정 — 영상-only 입력 중 실수로 뒤로가기 시 작업 손실 방지.
+    if (title || description || images.length > 0 || videos.length > 0) {
       Alert.alert(t('upload_cancel'), t('upload_cancel_desc'), [
         { text: t('upload_cancel_continue'), style: 'cancel' },
         { text: t('upload_cancel_leave'), style: 'destructive', onPress: () => navigation.goBack() },
