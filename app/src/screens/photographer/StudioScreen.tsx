@@ -20,6 +20,7 @@ import { usePhotographer } from '../../contexts/PhotographerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import * as photographerApi from '../../services/photographerApi';
 import GradeBadge from '../../components/photographer/GradeBadge';
+import VideoPlayer from '../../components/common/VideoPlayer';
 import type { RootStackParamList } from '../../types/navigation';
 import type { Photographer, PhotoPost } from '../../types/photographer';
 import type { PhotographerApplication } from '../../types/photographerApplication';
@@ -427,7 +428,19 @@ function StudioApprovedLayout({
                   onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
                 >
                   <View style={styles.postImageWrap}>
-                    <Image source={{ uri: previewUrl }} style={styles.postCardImage} />
+                    {previewUrl ? (
+                      <Image source={{ uri: previewUrl }} style={styles.postCardImage} />
+                    ) : hasVideo && post.videos[0] ? (
+                      // Plan 04-10 Sub-issue B: 영상-only 포스트 fallback — expo-video native poster (첫 프레임). studio mode = autoplay 없음, nativeControls 없음.
+                      <VideoPlayer
+                        uri={post.videos[0]}
+                        mode="studio"
+                        width={CARD_WIDTH}
+                        height={(CARD_WIDTH * 5) / 4}
+                      />
+                    ) : (
+                      <View style={[styles.postCardImage, { backgroundColor: colors.surface }]} />
+                    )}
                     {hasVideo && (
                       <View style={styles.videoPlayOverlay}>
                         <Ionicons name="play" size={16} color="#FFFFFF" />

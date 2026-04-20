@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { usePhotographer } from '../../contexts/PhotographerContext';
 import EmptyState from '../../components/common/EmptyState';
+import VideoPlayer from '../../components/common/VideoPlayer';
 import type { RootStackParamList } from '../../types/navigation';
 import type { PhotoPost } from '../../types/photographer';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
@@ -135,7 +136,19 @@ export default function CollectionDetailScreen() {
                 activeOpacity={0.85}
                 onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
               >
-                <Image source={{ uri: previewUrl }} style={styles.gridImage} />
+                {previewUrl ? (
+                  <Image source={{ uri: previewUrl }} style={styles.gridImage} />
+                ) : hasVideo && item.videos[0] ? (
+                  // Plan 04-10 Sub-issue B: 영상-only 포스트 fallback poster — expo-video native poster. studio mode = autoplay 없음, nativeControls 없음.
+                  <VideoPlayer
+                    uri={item.videos[0]}
+                    mode="studio"
+                    width={THUMB_SIZE}
+                    height={THUMB_SIZE}
+                  />
+                ) : (
+                  <View style={[styles.gridImage, { backgroundColor: colors.surface }]} />
+                )}
                 {hasVideo && (
                   <View style={styles.videoPlayOverlay}>
                     <Ionicons name="play" size={14} color="#FFFFFF" />
