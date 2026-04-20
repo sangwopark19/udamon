@@ -17,6 +17,7 @@ import type {
 } from '../types/photographer';
 import type { Cheerleader } from '../types/cheerleader';
 import type { CommunityPostWithAuthor } from '../types/community';
+import type { PhotographerApplication } from '../types/photographerApplication';
 import * as photographerApi from '../services/photographerApi';
 import { useAuth } from './AuthContext';
 import { useLoginGate } from '../hooks/useLoginGate';
@@ -104,6 +105,19 @@ interface PhotographerContextValue {
   // Home feed (5 photo : 1 community)
   getHomeFeed: (communityPosts: CommunityPostWithAuthor[], page: number) => HomeFeedItem[];
 
+  // Application (PHOT-02 — Context-as-store 통합, Plan 04-08 gap closure)
+  myApplication: PhotographerApplication | null;
+  applicationLoading: boolean;
+  submitPhotographerApplication: (params: {
+    user_id: string;
+    team_slug: string | null;
+    activity_links: string[];
+    activity_plan: string;
+    portfolio_url?: string | null;
+    bio?: string;
+  }) => Promise<{ data: PhotographerApplication | null; error: string | null }>;
+  refreshMyApplication: () => Promise<void>;
+
   // Likes (optimistic + rollback) — D-22 fix
   photoLikedIds: Set<string>;
   togglePhotoLike: (postId: string) => Promise<void>;
@@ -158,6 +172,10 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
   const [comments, setComments] = useState<PhotoComment[]>([]);
   const [photoLikedIds, setPhotoLikedIds] = useState<Set<string>>(new Set());
   const [followedPgIds, setFollowedPgIds] = useState<Set<string>>(new Set());
+
+  // Application (Plan 04-08 gap closure — Context-as-store 통합)
+  const [myApplication, setMyApplication] = useState<PhotographerApplication | null>(null);
+  const [applicationLoading, setApplicationLoading] = useState(false);
 
   // ─── Pagination state (D-23) ──────────────────────────────
   const [currentTeamSlug, setCurrentTeamSlug] = useState<string | undefined>(undefined);
@@ -224,6 +242,49 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshData();
   }, [refreshData]);
+
+  // ─── Application (PHOT-02 — Plan 04-08 gap closure) ───────
+  const refreshMyApplication = useCallback(async () => {
+    if (!userId) {
+      setMyApplication(null);
+      return;
+    }
+    setApplicationLoading(true);
+    try {
+      const res = await photographerApi.fetchMyPhotographerApplication(userId);
+      if (res.error) {
+        console.warn('[PhotographerContext] refreshMyApplication error', res.error);
+        // error 시 기존 state 유지 (network blip 대응). 명시적 fail-closed 는 하지 않음.
+        return;
+      }
+      setMyApplication(res.data);
+    } finally {
+      setApplicationLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void refreshMyApplication();
+  }, [refreshMyApplication]);
+
+  const submitApplication = useCallback(
+    async (params: {
+      user_id: string;
+      team_slug: string | null;
+      activity_links: string[];
+      activity_plan: string;
+      portfolio_url?: string | null;
+      bio?: string;
+    }) => {
+      const res = await photographerApi.submitPhotographerApplication(params);
+      if (res.data) {
+        // 성공 — Context state 즉시 업데이트 → 구독 중인 MainTabNavigator / StudioScreen 자동 리렌더
+        setMyApplication(res.data);
+      }
+      return res;
+    },
+    [],
+  );
 
   // ─── Pagination (D-23) ────────────────────────────────────
   const loadMorePhotoPosts = useCallback(
@@ -702,6 +763,10 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
       getEvent,
       getEventsByType,
       getHomeFeed,
+      myApplication,
+      applicationLoading,
+      submitPhotographerApplication: submitApplication,
+      refreshMyApplication,
       photoLikedIds,
       togglePhotoLike,
       isPhotoLiked,
@@ -748,6 +813,10 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
       getEvent,
       getEventsByType,
       getHomeFeed,
+      myApplication,
+      applicationLoading,
+      submitApplication,
+      refreshMyApplication,
       photoLikedIds,
       togglePhotoLike,
       isPhotoLiked,
