@@ -289,17 +289,60 @@ blocked_list: [14]
   debug_session: "inline — 별도 debug session 파일 생성 없음. 본 gap 항목에 root_cause / evidence / artifacts / missing 모두 기록됨."
 
 - truth: "영상 포스트가 피드 viewport 에 들어오면 autoplay, 벗어나면 pause 되어야 함 (HomeScreen trending grid 기준)"
-  status: failed
+  status: diagnosed
   reason: |
     User reported (Test 12 재테스트):
     1. 이미지와 영상을 같이 넣으면 항상 이미지가 썸네일이 되어서 테스트 불가
     2. 영상만 넣고 싶어도 영상만 넣을시 게시하기 버튼이 비활성화 되어서 테스트 불가.
   severity: major
   test: 12
-  observation: "Test 12 (Feed Autoplay) 자체의 autoplay 로직이 틀렸다기보다, 검증 선행 조건(영상-only 포스트 생성 + 피드 카드에서 영상 썸네일/VideoPlayer 마운트) 이 두 UX 결함으로 차단됨. (a) 피드 preview 썸네일 선택 규칙이 images[0] 우선이라 혼합 포스트는 feed 에서 VideoPlayer 경로로 빠지지 않음. (b) UploadPostScreen 제출 버튼 활성화 조건이 images.length >= 1 을 요구해 videos-only submit 이 불가능."
-  artifacts: []  # 조사 필요 — diagnose 단계에서 채움
+  observation: "Test 12 (Feed Autoplay) 자체의 autoplay 로직(Plan 04-09 trending grid) 은 정상. 검증 선행 조건(영상-only 포스트 생성 + 피드 카드에서 영상 썸네일/VideoPlayer 마운트) 이 두 독립 결함으로 차단됨."
+  root_cause: |
+    Two independent sub-issues (debug session: .planning/debug/video-only-submit-and-feed-thumbnail.md):
+
+    Sub-issue A — 영상-only submit CTA disabled (purely client-side UI gating):
+      UploadPostScreen.tsx:93-97 의 `canPublish` 가 `images.length > 0` 만 AND 로 요구, `videos.length` 미참조. line 336-346 disable 로직이 이에 의존. Server/DB/Edge function 은 모두 영상-only 를 수용 (photo_posts.images CHECK 는 array_length(ARRAY[]::TEXT[], 1) = NULL → NULL BETWEEN 1 AND 7 = NULL → PASS). UI-SPEC §UploadPostScreen line 157/381 에 '동영상 (선택)' + 'video-only post — edge case' 로 기획 명시 허용.
+
+    Sub-issue B — 피드 카드 썸네일이 항상 images[0] (렌더 분기 누락, 다중 스크린):
+      Plan 04-09 이 HomeScreen trending grid + PostDetailScreen 에만 통합 media/VideoPlayer 렌더를 적용. 나머지 피드 진입점 (HomeScreen featured 섹션, AllPostsScreen, FeaturedAllScreen, PhotographerProfileScreen, ArchiveScreen) 은 `previewUri = post.thumbnail_urls?.[0] ?? post.images[0]` + `<Image>` + static play overlay 로 그대로 남음. 혼합 포스트는 image 선택, 영상-only 는 previewUri undefined 로 회색 placeholder. 추가로 supabase/functions/generate-thumbnails/index.ts 가 imageUrls 만 처리하므로 영상-only 포스트의 thumbnail_urls 는 영구 empty — 정적 썸네일 fallback 경로 부재.
+  artifacts:
+    - path: "app/src/screens/photographer/UploadPostScreen.tsx"
+      issue: "Sub-issue A 핵심 — lines 93-97 canPublish 조건에 videos.length 누락. line 222-233 doPublish Step 1 uploadPostImages 가 images=[] 분기 없음. line 317 handleClose dirty-check 도 videos.length 누락 (부차 결함). line 189-206 editing 분기도 같은 canPublish 조건에 걸려 영상-only 기존 post 편집 불가."
+    - path: "app/src/services/photographerApi.ts"
+      issue: "정상 — line 523-564 createPhotoPost 는 images: params.images 그대로 INSERT, 빈 배열 거부 없음. 변경 불필요."
+    - path: "supabase/migrations/007_photographer.sql"
+      issue: "정상 — line 50 images TEXT[] CHECK (array_length(images, 1) BETWEEN 1 AND 7). PostgreSQL 의미론상 빈 배열 PASS. 변경 불필요."
+    - path: "supabase/migrations/029_photo_posts_videos.sql"
+      issue: "정상 — videos 컬럼 도입, 빈 images + non-empty videos 시나리오 수용. 변경 불필요."
+    - path: "app/src/screens/home/HomeScreen.tsx"
+      issue: "부분 정상 — lines 372-447 trending grid 는 Plan 04-09 대로 VideoPlayer(mode='feed', isVisible) + onViewableItemsChanged 완료. 단, lines 209-252 'home_featured' 섹션은 누락 — images[0] + static play overlay 만 표시, 영상-only 는 회색 placeholder."
+    - path: "app/src/screens/home/AllPostsScreen.tsx"
+      issue: "Sub-issue B — lines 55-106 renderPost 가 <Image> + static play overlay 만. VideoPlayer 분기 없음."
+    - path: "app/src/screens/home/FeaturedAllScreen.tsx"
+      issue: "Sub-issue B — lines 57-74 카드 렌더 동일 패턴, VideoPlayer 분기 없음."
+    - path: "app/src/screens/photographer/PhotographerProfileScreen.tsx"
+      issue: "Sub-issue B — lines 451-472 그리드 카드 동일 패턴."
+    - path: "app/src/screens/archive/ArchiveScreen.tsx"
+      issue: "Sub-issue B — lines 177-201 그리드 카드 동일 패턴."
+    - path: "app/src/screens/photographer/StudioScreen.tsx"
+      issue: "설계상 정상 — UI-SPEC 기준 studio 모드는 정적 썸네일 + play overlay 의도. 단, 영상-only 포스트 회색 placeholder 문제는 공유 → fallback preview 만 필요."
+    - path: "app/src/screens/photographer/CollectionDetailScreen.tsx"
+      issue: "동일 — 정적 썸네일 유지가 설계이나 영상-only fallback 필요."
+    - path: "supabase/functions/generate-thumbnails/index.ts"
+      issue: "lines 99-173 imageUrls 만 처리. 영상 입력/출력 없음 → 영상-only 포스트 thumbnail_urls 영구 empty. 확장 여부는 open question (3가지 대안)."
+    - path: "app/src/components/common/VideoPlayer.tsx"
+      issue: "정상 — 3 modes 완성, isVisible prop 구현됨. 재사용 준비 완료. 변경 불필요."
+    - path: "app/src/screens/explore/PostDetailScreen.tsx"
+      issue: "정상 — 이미 통합 media 렌더 완료 (Test 13 pass 일치). 변경 불필요."
+    - path: ".planning/phases/04-photographer/04-UI-SPEC.md"
+      issue: "참고 — line 157/381 '동영상 (선택)' + 'video-only post — edge case' 명시, line 269 expo-video poster prop 언급."
   missing:
-    - "UploadPostScreen submit CTA 활성화 조건을 (images.length + videos.length) >= 1 로 완화 — videos-only 포스트 생성 경로 허용."
-    - "피드 카드 썸네일 선택 규칙에 video-first 분기 추가 — images 가 비어있고 videos 만 있는 포스트는 thumbnail_urls[0] (generate-thumbnails 산출물) 또는 videos[0] poster 로 preview 렌더 + hasVideo play overlay. 혼합 포스트는 현재 images[0] 유지(기획 확인 필요)."
-    - "대안: 혼합 포스트에서도 videos 를 우선 surface 하려면 UploadPostScreen 에 'cover media' 선택 UI 추가 → first_media_type/first_media_url 컬럼 도입 후 피드 카드가 그 값을 렌더. (범위 큼 — 기획 합의 필요)"
-    - "수정 후 Test 12 / Test 13 재테스트."
+    - "Sub-issue A: UploadPostScreen.tsx canPublish 조건을 `images.length > 0 || videos.length > 0` 로 완화 (line 93-97)."
+    - "Sub-issue A: UploadPostScreen.tsx doPublish Step 1 의 uploadPostImages 호출을 `if (images.length > 0)` 분기로 감싸고, `finalImages` 변수로 집계 → createPhotoPost 에 전달. generate-thumbnails 호출도 `finalImages.length > 0` 가드."
+    - "Sub-issue A: UploadPostScreen.tsx handleClose dirty-check (line 317) 에 `videos.length > 0` 추가 (권장)."
+    - "Sub-issue B: HomeScreen featured 섹션 + AllPostsScreen + FeaturedAllScreen + PhotographerProfileScreen + ArchiveScreen 의 카드 렌더를 HomeScreen trending 의 VideoPlayer(mode='feed', isVisible) + onViewableItemsChanged + viewabilityConfig + visibleIndices 패턴으로 통일."
+    - "Sub-issue B: 영상-only 포스트 정적 fallback — 클라이언트 expo-video poster prop 사용(가장 경량, 즉시 적용 가능) 을 v1 기본안으로. 선택: generate-thumbnails 확장 또는 클라이언트 first-frame 추출은 향후 phase 로 이월."
+    - "Open question (기획 합의 필요): 혼합 포스트 (images+videos 둘 다) 피드 카드 썸네일 우선순위 — trending 은 이미 video-first, featured/archive 등도 동일하게 갈지 또는 정지 이미지 유지할지. 합의 안 될 경우 v1 은 trending=video-first, 나머지=images[0] 유지 + hasVideo play overlay 로 구분."
+    - "Open question (기획 합의 필요): AllPosts/FeaturedAll/PhotographerProfile/Archive 의 viewport autoplay 도입 여부 — 기술적 가능, 배터리/데이터 비용 증가. v1 scope 결정 필요."
+    - "수정 후 Test 12 / Test 13 (재재테스트 불필요하지만 Test 12 재개 필요)."
+  debug_session: ".planning/debug/video-only-submit-and-feed-thumbnail.md"
