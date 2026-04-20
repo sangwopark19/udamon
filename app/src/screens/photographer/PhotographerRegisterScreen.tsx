@@ -18,7 +18,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../../contexts/AuthContext';
-import * as photographerApi from '../../services/photographerApi';
+import { usePhotographer } from '../../contexts/PhotographerContext';
 import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/theme';
@@ -34,6 +34,7 @@ export default function PhotographerRegisterScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
+  const { submitPhotographerApplication } = usePhotographer();
 
   const [step, setStep] = useState<Step>(1);
   const [loading, setLoading] = useState(false);
@@ -87,7 +88,7 @@ export default function PhotographerRegisterScreen() {
     } else if (step === 3) {
       if (!copyrightConfirmed || !selectedTeamId || !user) return;
       setLoading(true);
-      const res = await photographerApi.submitPhotographerApplication({
+      const res = await submitPhotographerApplication({
         user_id: user.id,
         team_slug: selectedTeamId,
         activity_links: activityLinks.map((s) => s.trim()).filter(Boolean),
