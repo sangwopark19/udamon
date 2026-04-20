@@ -515,6 +515,7 @@ export default {
   a11y_retry_load: '다시 불러오기',
   a11y_dismiss_recent_search: '최근 검색어 삭제',
   a11y_poll_option_disabled: '{{label}} - 투표 마감',
+  a11y_video_preview: '영상 미리보기',
 
   // Home extra
   home_trending_posts: '인기 포스트',
