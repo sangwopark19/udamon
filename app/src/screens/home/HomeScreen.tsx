@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   StyleSheet,
   Dimensions,
   RefreshControl,
+  FlatList,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,6 +33,7 @@ import type { RootStackParamList, MainTabParamList } from '../../types/navigatio
 import { colors, fontSize, fontWeight, radius, layout, spacing } from '../../styles/theme';
 import FadeInView from '../../components/common/FadeInView';
 import { HomeSkeleton } from '../../components/common/Skeleton';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Home'>,
@@ -57,6 +60,17 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => { setReady(true); }, []);
+
+  // Plan 04-09: viewport-aware autoplay for trending grid video cards
+  const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const indices = new Set<number>();
+    viewableItems.forEach((vt) => {
+      if (typeof vt.index === 'number') indices.add(vt.index);
+    });
+    setVisibleIndices(indices);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const myTeamId = user?.my_team_id ?? null;
   const myTeam = myTeamId ? KBO_TEAMS.find((t) => t.id === myTeamId) : null;
@@ -192,36 +206,49 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.featuredScroll}
             >
-              {featured.map((post) => (
-                <TouchableOpacity
-                  key={post.id}
-                  style={styles.featuredCard}
-                  activeOpacity={0.85}
-                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-                >
-                  <View style={styles.featuredImageWrap}>
-                    <Image source={{ uri: post.images[0] }} style={styles.featuredImage} />
-                    <LinearGradient
-                      colors={['transparent', 'rgba(0,0,0,0.8)']}
-                      locations={[0.4, 1]}
-                      style={styles.featuredGradient}
-                    />
-                    <View style={styles.featuredTag}>
-                      <Text style={styles.featuredTagText}>📸 {t('home_featured_tag')}</Text>
-                    </View>
-                    <View style={styles.featuredBottom}>
-                      <Text style={styles.featuredPostName} numberOfLines={1}>{post.title}</Text>
-                      <View style={styles.featuredMetaRow}>
-                        <Text style={styles.featuredPhotographer}>@{post.photographer.display_name}</Text>
-                        <View style={styles.featuredLikes}>
-                          <Ionicons name="heart" size={10} color={colors.primary} />
-                          <Text style={styles.featuredLikesText}>{formatCount(post.like_count)}</Text>
+              {featured.map((post) => {
+                const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+                const hasVideo = (post.videos?.length ?? 0) > 0;
+                return (
+                  <TouchableOpacity
+                    key={post.id}
+                    style={styles.featuredCard}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                  >
+                    <View style={styles.featuredImageWrap}>
+                      {previewUri ? (
+                        <Image source={{ uri: previewUri }} style={styles.featuredImage} />
+                      ) : (
+                        <View style={[styles.featuredImage, { backgroundColor: colors.surface }]} />
+                      )}
+                      {hasVideo && (
+                        <View style={styles.featuredPlayOverlay}>
+                          <Ionicons name="play" size={16} color="#FFFFFF" />
+                        </View>
+                      )}
+                      <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.8)']}
+                        locations={[0.4, 1]}
+                        style={styles.featuredGradient}
+                      />
+                      <View style={styles.featuredTag}>
+                        <Text style={styles.featuredTagText}>📸 {t('home_featured_tag')}</Text>
+                      </View>
+                      <View style={styles.featuredBottom}>
+                        <Text style={styles.featuredPostName} numberOfLines={1}>{post.title}</Text>
+                        <View style={styles.featuredMetaRow}>
+                          <Text style={styles.featuredPhotographer}>@{post.photographer.display_name}</Text>
+                          <View style={styles.featuredLikes}>
+                            <Ionicons name="heart" size={10} color={colors.primary} />
+                            <Text style={styles.featuredLikesText}>{formatCount(post.like_count)}</Text>
+                          </View>
                         </View>
                       </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </>
         )}
@@ -342,59 +369,81 @@ export default function HomeScreen() {
         </View>
 
         <FadeInView delay={100}>
-        <View style={styles.postGrid}>
-          {trendingPosts.map((post) => (
-            <PressableScale
-              key={post.id}
-              style={styles.postCard}
-              scaleTo={0.97}
-              onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-            >
-              <View style={styles.postImageWrap}>
-                <Image source={{ uri: post.images[0] }} style={styles.postImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  locations={[0.3, 1]}
-                  style={styles.postImageOverlay}
-                />
-                <View style={styles.postTagRow}>
-                  {(() => {
-                    const td = KBO_TEAMS.find((t) => t.id === post.team_id);
-                    return (
+          <FlatList
+            data={trendingPosts}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            scrollEnabled={false}
+            columnWrapperStyle={{ gap: GRID_GAP, marginBottom: GRID_GAP }}
+            contentContainerStyle={{ paddingHorizontal: GRID_PADDING }}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            renderItem={({ item: post, index }) => {
+              const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+              const hasVideo = (post.videos?.length ?? 0) > 0;
+              const videoUri = post.videos?.[0];
+              const isVisible = visibleIndices.has(index);
+              const td = KBO_TEAMS.find((tm) => tm.id === post.team_id);
+              return (
+                <PressableScale
+                  style={styles.postCard}
+                  scaleTo={0.97}
+                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                >
+                  <View style={styles.postImageWrap}>
+                    {hasVideo && videoUri ? (
+                      <VideoPlayer
+                        uri={videoUri}
+                        mode="feed"
+                        width={CARD_WIDTH}
+                        height={CARD_WIDTH * 1.25}
+                        isVisible={isVisible}
+                      />
+                    ) : previewUri ? (
+                      <Image source={{ uri: previewUri }} style={styles.postImage} />
+                    ) : (
+                      <View style={[styles.postImage, { backgroundColor: colors.surface }]} />
+                    )}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.8)']}
+                      locations={[0.3, 1]}
+                      style={styles.postImageOverlay}
+                      pointerEvents="none"
+                    />
+                    <View style={styles.postTagRow}>
                       <View style={[styles.teamTag, td && { borderColor: td.color }]}>
                         <Text style={[styles.teamTagText, td && { color: td.color }]}>
                           {td?.shortName ?? post.team.name_ko}
                         </Text>
                       </View>
-                    );
-                  })()}
-                </View>
-                <View style={styles.postBottomInfo}>
-                  <View style={styles.engagementRow}>
-                    <Ionicons name="heart" size={10} color={colors.error} />
-                    <Text style={styles.engagementText}>{formatCount(post.like_count)}</Text>
-                    <Text style={styles.viewsText}>{t('home_views', { count: formatCount(post.view_count) })}</Text>
-                  </View>
-                  <Text style={styles.photographerName}>@{post.photographer.display_name}</Text>
-                </View>
-              </View>
-              <View style={styles.postInfo}>
-                <Text style={styles.postName} numberOfLines={2}>{post.title}</Text>
-                <View style={styles.postFooter}>
-                  {post.player && (
-                    <View style={styles.playerBadge}>
-                      <Text style={styles.playerBadgeText}>#{post.player.name_ko}</Text>
                     </View>
-                  )}
-                  <View style={styles.formatBadge}>
-                    <Ionicons name="image" size={10} color={colors.textSecondary} />
-                    <Text style={styles.formatText}>PHOTO</Text>
+                    <View style={styles.postBottomInfo}>
+                      <View style={styles.engagementRow}>
+                        <Ionicons name="heart" size={10} color={colors.error} />
+                        <Text style={styles.engagementText}>{formatCount(post.like_count)}</Text>
+                        <Text style={styles.viewsText}>{t('home_views', { count: formatCount(post.view_count) })}</Text>
+                      </View>
+                      <Text style={styles.photographerName}>@{post.photographer.display_name}</Text>
+                    </View>
                   </View>
-                </View>
-              </View>
-            </PressableScale>
-          ))}
-        </View>
+                  <View style={styles.postInfo}>
+                    <Text style={styles.postName} numberOfLines={2}>{post.title}</Text>
+                    <View style={styles.postFooter}>
+                      {post.player && (
+                        <View style={styles.playerBadge}>
+                          <Text style={styles.playerBadgeText}>#{post.player.name_ko}</Text>
+                        </View>
+                      )}
+                      <View style={styles.formatBadge}>
+                        <Ionicons name={hasVideo ? 'videocam' : 'image'} size={10} color={colors.textSecondary} />
+                        <Text style={styles.formatText}>{hasVideo ? 'VIDEO' : 'PHOTO'}</Text>
+                      </View>
+                    </View>
+                  </View>
+                </PressableScale>
+              );
+            }}
+          />
         </FadeInView>
       </ScrollView>
     </View>
@@ -447,6 +496,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm, borderWidth: 1, borderColor: colors.featuredAlpha40,
   },
   featuredTagText: { fontSize: fontSize.badge, fontWeight: fontWeight.heading, color: colors.featuredAccent, letterSpacing: 0.5 },
+  featuredPlayOverlay: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
+  },
   featuredBottom: { position: 'absolute', bottom: spacing.md, left: spacing.md, right: spacing.md },
   featuredPostName: { fontSize: fontSize.body, fontWeight: fontWeight.name, color: colors.buttonPrimaryText, marginBottom: 4 },
   featuredMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
