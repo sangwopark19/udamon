@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 UI-SPEC approved (6/6 dimensions)
-last_updated: "2026-04-15T07:00:01.567Z"
-last_activity: 2026-04-15
+stopped_at: "Phase 4 plan 04-10 (UAT Test 12 gap closure) complete — awaiting verification"
+last_updated: "2026-04-21T00:00:00.000Z"
+last_activity: 2026-04-21 -- Phase 04 plan 04-10 complete (UAT Test 12 resolved)
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
+  completed_phases: 3
+  total_plans: 23
+  completed_plans: 23
   percent: 100
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
-Status: Executing Phase 04
-Last activity: 2026-04-15
+Phase: 04 (photographer) — EXECUTING (UAT finalize 대기)
+Plan: 10 of 10 (04-10 gap closure complete)
+Status: Executing Phase 04 — awaiting verification
+Last activity: 2026-04-21 -- Phase 04 plan 04-10 complete (UAT Test 12 resolved)
 
 Progress: [██████████] 100%
 
@@ -68,6 +68,10 @@ Recent decisions affecting current work:
 - [03-04]: get-upload-url Edge Function은 --no-verify-jwt로 배포 (프로젝트가 ES256 asymmetric JWT key로 rotation됐고 platform gateway는 여전히 HS256으로 검증 → user token을 "Invalid JWT"로 거부). 내부에서 supabase.auth.getUser() 로 여전히 사용자 검증
 - [03-04]: R2 presigned URL 생성 시 ContentLength 바인딩 제거 + requestChecksumCalculation/responseChecksumValidation=WHEN_REQUIRED (AWS SDK v3 기본 flexible checksum은 R2 + fetch/XHR 조합에서 SignatureDoesNotMatch 발생)
 - [03-04]: r2.dev public URL (pub-bde2aaf7c59f459d8d907881400a8959.r2.dev) 은 v1 QA + early user traffic용. 도메인 구매 후 custom domain (media.udamonfan.com) 으로 전환 필요
+- [04-10]: featured 섹션 viewport autoplay 검증 — 영상 포함 featured 포스트 부재로 실기기 관찰 불가했으나 AllPostsScreen PASS + 구조 동등성 + DB 승격 (2 posts to is_featured=true, featured_week='2026-W17') 으로 판정
+- [04-10]: 혼합 포스트 (images+videos) 는 5 피드 surface 전부 video-first 통일 — trending 그리드와 일관성. 이미지 우선 노출 없음.
+- [04-10]: 영상-only 포스트 정적 fallback 은 expo-video native poster (mode='studio') 만 사용 — generate-thumbnails 확장은 v1 scope 제외 (영상 first-frame 추출 부담 대비 사용자가치 낮음)
+- [04-10]: 5 피드 surface viewport autoplay 도입 (HomeScreen featured / AllPosts / FeaturedAll / PhotographerProfile / Archive). itemVisiblePercentThreshold=60 trending 과 동일. 배터리/데이터 비용 수용.
 
 ### Pending Todos
 
@@ -101,7 +105,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-14T07:04:25.249Z
-Stopped at: Phase 4 UI-SPEC approved (6/6 dimensions)
-Resume file: .planning/phases/04-photographer/04-UI-SPEC.md
-Next step: `/gsd-plan-phase 4` (photographer) or `/gsd-discuss-phase 4` depending on whether requirements need more context
+Last session: 2026-04-21T00:00:00.000Z
+Stopped at: Phase 4 plan 04-10 (UAT Test 12 gap closure) complete — awaiting verification
+Resume file: .planning/phases/04-photographer/04-10-SUMMARY.md
+Next step: `/gsd-verify-work` (04-10 verifier) → 이상 없으면 Phase 4 종료 + `/gsd-transition` 으로 Phase 5 Admin 진입
