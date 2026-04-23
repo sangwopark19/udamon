@@ -68,16 +68,27 @@ export default function VideoPlayer({ uri, mode, width, height, isVisible = true
     };
   }, [player, onError]);
 
+  // feed/studio 모드는 부모 Pressable (썸네일 카드) 의 onPress 가 동작해야 하므로
+  // 루트 View 에서 터치를 흡수하지 않고 부모로 전달 (pointerEvents="none").
+  // detail 모드는 nativeControls 가 자체 터치 (재생/PiP) 를 받아야 하므로 'auto'.
+  const passThroughTouches = mode !== 'detail';
+
   if (error) {
     return (
-      <View style={[styles.placeholder, { width, height }]}>
+      <View
+        style={[styles.placeholder, { width, height }]}
+        pointerEvents={passThroughTouches ? 'none' : 'auto'}
+      >
         <Ionicons name="alert-circle-outline" size={24} color={colors.textTertiary} />
       </View>
     );
   }
 
   return (
-    <View style={{ width, height }}>
+    <View
+      style={{ width, height }}
+      pointerEvents={passThroughTouches ? 'none' : 'auto'}
+    >
       <VideoView
         player={player}
         style={{ width, height }}
@@ -86,7 +97,10 @@ export default function VideoPlayer({ uri, mode, width, height, isVisible = true
         contentFit="cover"
       />
       {isLoading && (
-        <View style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]}>
+        <View
+          style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]}
+          pointerEvents="none"
+        >
           <ActivityIndicator color={colors.primary} size="small" />
         </View>
       )}
