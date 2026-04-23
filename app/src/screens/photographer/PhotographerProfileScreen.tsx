@@ -361,7 +361,15 @@ export default function PhotographerProfileScreen() {
         </View>
 
         {/* Featured Post */}
-        {featuredPost && (
+        {featuredPost && (() => {
+          // IN-10: featured 카드도 video-first 패턴 — thumbnail → images[0] → studio-mode VideoPlayer (first frame) → grey placeholder.
+          // sectionWrap paddingHorizontal=16 이므로 너비 = SCREEN_WIDTH - 32.
+          const featuredPreviewUri = featuredPost.thumbnail_urls?.[0] ?? featuredPost.images[0];
+          const featuredHasVideo = (featuredPost.videos?.length ?? 0) > 0;
+          const featuredVideoUri = featuredPost.videos?.[0];
+          const FEATURED_WIDTH = SCREEN_WIDTH - 32;
+          const FEATURED_HEIGHT = 220;
+          return (
           <View style={styles.sectionWrap}>
             <Text style={styles.sectionHeading}>
               {'\uD83D\uDCCC'} {t('pg_featured_post')}
@@ -371,11 +379,27 @@ export default function PhotographerProfileScreen() {
               activeOpacity={0.85}
               onPress={() => navigation.navigate('PostDetail', { postId: featuredPost.id })}
             >
-              <Image source={{ uri: featuredPost.images[0] }} style={styles.featuredImage} />
+              {featuredPreviewUri ? (
+                <Image source={{ uri: featuredPreviewUri }} style={styles.featuredImage} />
+              ) : featuredHasVideo && featuredVideoUri ? (
+                <VideoPlayer
+                  uri={featuredVideoUri}
+                  mode="studio"
+                  width={FEATURED_WIDTH}
+                  height={FEATURED_HEIGHT}
+                />
+              ) : (
+                <View style={[styles.featuredImage, { backgroundColor: colors.surface }]} />
+              )}
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.85)']}
                 style={styles.featuredGradient}
               />
+              {featuredHasVideo && (
+                <View style={styles.featuredVideoBadge}>
+                  <Ionicons name="play" size={14} color="#FFFFFF" />
+                </View>
+              )}
               <View style={styles.featuredContent}>
                 <Text style={styles.featuredTitle} numberOfLines={1}>{featuredPost.title}</Text>
                 {featuredPost.description ? (
@@ -397,7 +421,8 @@ export default function PhotographerProfileScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        )}
+          );
+        })()}
 
         {/* Collections — hide when photographer has none and not own profile */}
         {(isOwnProfile || pgCollections.length > 0) && (
@@ -859,6 +884,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
+  },
+  featuredVideoBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   featuredContent: {
     position: 'absolute',
