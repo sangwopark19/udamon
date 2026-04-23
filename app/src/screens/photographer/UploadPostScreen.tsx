@@ -44,7 +44,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'UploadPost'>;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const MAX_PHOTOS = 10;
+const MAX_PHOTOS = 7;
 const MAX_VIDEOS = 3;
 
 export default function UploadPostScreen() {
