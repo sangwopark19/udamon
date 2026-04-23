@@ -188,18 +188,14 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
   const pendingFollowOps = useRef<Set<string>>(new Set());
 
   // ─── Initial fetch / refresh ──────────────────────────────
+  // WR-02: 개별 API 의 { data, error } 튜플에서 error 를 명시적으로 관찰하고,
+  // Promise.all 바깥에서 발생하는 예외도 top-level catch 로 로깅한다.
+  // 각 API 는 이미 try/catch 로 error 튜플을 반환하므로 Promise.all 자체는
+  // 일반적으로 reject 되지 않지만, 방어적으로 try/catch 를 추가.
   const refreshData = useCallback(async () => {
     setLoading(true);
     try {
-      const [
-        photographersRes,
-        postsRes,
-        playersRes,
-        cheerleadersRes,
-        eventsRes,
-        collectionsRes,
-        commentsRes,
-      ] = await Promise.all([
+      const results = await Promise.all([
         photographerApi.fetchPhotographers(),
         photographerApi.fetchPhotoPosts({ page: 0, pageSize: PAGE_SIZE }),
         photographerApi.fetchPlayers(),
@@ -208,6 +204,31 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
         photographerApi.fetchCollections(),
         photographerApi.fetchAllComments(),
       ]);
+
+      const labels = [
+        'photographers',
+        'photoPosts',
+        'players',
+        'cheerleaders',
+        'events',
+        'collections',
+        'comments',
+      ];
+      results.forEach((r, i) => {
+        if (r.error) {
+          console.warn(`[PhotographerContext] fetch[${labels[i]}] error`, r.error);
+        }
+      });
+
+      const [
+        photographersRes,
+        postsRes,
+        playersRes,
+        cheerleadersRes,
+        eventsRes,
+        collectionsRes,
+        commentsRes,
+      ] = results;
 
       if (photographersRes.data) setPhotographers(photographersRes.data);
       if (postsRes.data) {
@@ -228,12 +249,20 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
           photographerApi.fetchUserPhotoLikes(userId),
           photographerApi.fetchUserFollows(userId),
         ]);
+        if (likesRes.error) {
+          console.warn('[PhotographerContext] fetch[likes] error', likesRes.error);
+        }
+        if (followsRes.error) {
+          console.warn('[PhotographerContext] fetch[follows] error', followsRes.error);
+        }
         if (likesRes.data) setPhotoLikedIds(new Set(likesRes.data));
         if (followsRes.data) setFollowedPgIds(new Set(followsRes.data));
       } else {
         setPhotoLikedIds(new Set());
         setFollowedPgIds(new Set());
       }
+    } catch (e) {
+      console.error('[PhotographerContext] refreshData unhandled', e);
     } finally {
       setLoading(false);
     }
