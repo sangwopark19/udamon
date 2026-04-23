@@ -51,7 +51,6 @@ export default function StudioScreen() {
     getPhotoPostsByPhotographer,
     myApplication,
     applicationLoading,
-    refreshMyApplication,
   } = usePhotographer();
 
   // route.params.photographerId — 다른 포토그래퍼의 스튜디오를 조회할 때 사용 (옵셔널)
@@ -59,9 +58,8 @@ export default function StudioScreen() {
 
   const [state, setState] = useState<StudioState>({ kind: 'loading' });
 
-  // refreshMyApplication 은 후속 pull-to-refresh 등에서 사용 예정 — 현재 경로에서는 호출 안함.
-  // 읽기만 해두면 unused warning 없이 향후 확장 가능.
-  void refreshMyApplication;
+  // IN-11: refreshMyApplication 은 pull-to-refresh 등 후속 기능 도입 시 다시 destructure 해서 사용.
+  // 현재 사용처가 없으므로 void 로 silence 하는 대신 destructure 자체를 제거.
 
   // override 경로: 다른 포토그래퍼의 스튜디오를 조회할 때 state machine 우회
   useEffect(() => {
