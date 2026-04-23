@@ -22,6 +22,7 @@ import { usePhotographer } from '../../contexts/PhotographerContext';
 import { useAuth } from '../../contexts/AuthContext';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'CheerleaderProfile'>;
@@ -226,35 +227,58 @@ export default function CheerleaderProfileScreen() {
           </View>
         ) : (
           <View style={styles.postGrid}>
-            {displayPosts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.postCard}
-                activeOpacity={0.85}
-                onPress={() => handlePostPress(post.id)}
-              >
-                <View style={styles.postImageWrap}>
-                  <Image source={{ uri: post.images[0] }} style={styles.postImage} />
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.7)']}
-                    locations={[0.4, 1]}
-                    style={styles.postGradient}
-                  />
-                  <View style={styles.postOverlay}>
-                    <View style={styles.postLikeRow}>
-                      <Ionicons name="heart" size={10} color={colors.error} />
-                      <Text style={styles.postLikeText}>{post.like_count}</Text>
+            {displayPosts.map((post) => {
+              // IN-08: video-first — 영상-only 포스트도 빈 타일 없이 poster 또는 studio-mode VideoPlayer 로 fallback.
+              // ScrollView 내부라 viewport autoplay 미적용 (HomeScreen 등 FlatList 기반 5 개 피드와 달리 no isVisible).
+              const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+              const hasVideo = (post.videos?.length ?? 0) > 0;
+              const videoUri = post.videos?.[0];
+              return (
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.postCard}
+                  activeOpacity={0.85}
+                  onPress={() => handlePostPress(post.id)}
+                >
+                  <View style={styles.postImageWrap}>
+                    {previewUri ? (
+                      <Image source={{ uri: previewUri }} style={styles.postImage} />
+                    ) : hasVideo && videoUri ? (
+                      <VideoPlayer
+                        uri={videoUri}
+                        mode="studio"
+                        width={CARD_W}
+                        height={CARD_IMG_H}
+                      />
+                    ) : (
+                      <View style={[styles.postImage, { backgroundColor: colors.surface }]} />
+                    )}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.7)']}
+                      locations={[0.4, 1]}
+                      style={styles.postGradient}
+                    />
+                    {hasVideo && (
+                      <View style={styles.videoPlayOverlay}>
+                        <Ionicons name="play" size={14} color="#FFFFFF" />
+                      </View>
+                    )}
+                    <View style={styles.postOverlay}>
+                      <View style={styles.postLikeRow}>
+                        <Ionicons name="heart" size={10} color={colors.error} />
+                        <Text style={styles.postLikeText}>{post.like_count}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.postInfo}>
-                  <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
-                  <Text style={styles.postPhotographer} numberOfLines={1}>
-                    @{post.photographer.display_name}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.postInfo}>
+                    <Text style={styles.postTitle} numberOfLines={2}>{post.title}</Text>
+                    <Text style={styles.postPhotographer} numberOfLines={1}>
+                      @{post.photographer.display_name}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -339,6 +363,12 @@ const styles = StyleSheet.create({
   },
   postImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   postGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
+  videoPlayOverlay: {
+    position: 'absolute', top: 6, right: 6,
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+  },
   postOverlay: { position: 'absolute', bottom: 6, left: 6 },
   postLikeRow: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
