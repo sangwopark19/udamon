@@ -463,7 +463,9 @@ export default function HomeScreen() {
                       )}
                       <View style={styles.formatBadge}>
                         <Ionicons name={hasVideo ? 'videocam' : 'image'} size={10} color={colors.textSecondary} />
-                        <Text style={styles.formatText}>{hasVideo ? 'VIDEO' : 'PHOTO'}</Text>
+                        <Text style={styles.formatText}>
+                          {t(hasVideo ? 'media_badge_video' : 'media_badge_photo')}
+                        </Text>
                       </View>
                     </View>
                   </View>

@@ -45,6 +45,10 @@ export default {
   home_hero_title: '야구장의 감동을\n사진으로 만나다',
   home_hero_subtitle: 'KBO 팬 포토그래퍼 커뮤니티',
 
+  // Media badges (사진/영상 형식 표기)
+  media_badge_video: 'VIDEO',
+  media_badge_photo: 'PHOTO',
+
   // Explore
   explore_title: '발견',
   explore_search_placeholder: '구단, 포토그래퍼 검색...',
