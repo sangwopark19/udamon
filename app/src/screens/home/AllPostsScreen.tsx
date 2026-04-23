@@ -41,13 +41,16 @@ export default function AllPostsScreen() {
   const [showDropdown, setShowDropdown] = useState(false);
 
   // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
-  const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
+  // WR-05: id 기반 tracking 으로 통일. useRef(handler).current 는 FlatList 제약.
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const indices = new Set<number>();
+    const ids = new Set<string>();
     viewableItems.forEach((vt) => {
-      if (typeof vt.index === 'number') indices.add(vt.index);
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
     });
-    setVisibleIndices(indices);
+    setVisibleIds(ids);
   }).current;
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
@@ -65,12 +68,12 @@ export default function AllPostsScreen() {
     }
   }, [photoPosts, sortMode]);
 
-  const renderPost = ({ item: post, index }: { item: PhotoPost; index: number }) => {
+  const renderPost = ({ item: post }: { item: PhotoPost; index: number }) => {
     const td = KBO_TEAMS.find((t) => t.id === post.team_id);
     const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
     const hasVideo = (post.videos?.length ?? 0) > 0;
     const videoUri = post.videos?.[0];
-    const isVisible = visibleIndices.has(index);
+    const isVisible = visibleIds.has(post.id);
     return (
       <TouchableOpacity
         style={styles.card}

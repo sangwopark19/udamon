@@ -62,13 +62,18 @@ export default function HomeScreen() {
   useEffect(() => { setReady(true); }, []);
 
   // Plan 04-09: viewport-aware autoplay for trending grid video cards
-  const [visibleIndices, setVisibleIndices] = useState<Set<number>>(new Set());
+  // WR-05: id 기반 tracking 으로 통일 (index 기반은 trending data 변동 시 stale).
+  // useRef(handler).current 는 FlatList 가 onViewableItemsChanged identity 변경을 거부하기 때문에 필수.
+  // 내부 setState 캡처는 안전하나, 추후 이 핸들러에서 props/state 를 참조하면 stale 위험 있음.
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const indices = new Set<number>();
+    const ids = new Set<string>();
     viewableItems.forEach((vt) => {
-      if (typeof vt.index === 'number') indices.add(vt.index);
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
     });
-    setVisibleIndices(indices);
+    setVisibleIds(ids);
   }).current;
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
@@ -400,11 +405,11 @@ export default function HomeScreen() {
             contentContainerStyle={{ paddingHorizontal: GRID_PADDING }}
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
-            renderItem={({ item: post, index }) => {
+            renderItem={({ item: post }) => {
               const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
               const hasVideo = (post.videos?.length ?? 0) > 0;
               const videoUri = post.videos?.[0];
-              const isVisible = visibleIndices.has(index);
+              const isVisible = visibleIds.has(post.id);
               const td = KBO_TEAMS.find((tm) => tm.id === post.team_id);
               return (
                 <PressableScale
