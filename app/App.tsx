@@ -194,7 +194,7 @@ function AppNavigator() {
       const route = canBrowse
         ? (onboardingDone === false ? 'Onboarding' : needsProfileSetup ? 'ProfileSetup' : 'MainTabs')
         : 'Login';
-      console.log('[AppNavigator] resetRoot →', route); // TODO: remove after stabilization
+      if (__DEV__) console.log('[AppNavigator] resetRoot →', route);
       navigationRef.resetRoot({ index: 0, routes: [{ name: route }] });
     }
     prevCanBrowseRef.current = canBrowse;
