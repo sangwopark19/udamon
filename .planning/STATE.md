@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: "Phase 04 shipped — PR #4"
 stopped_at: Phase 4 plan 04-10 (UAT Test 12 gap closure) complete — awaiting verification
-last_updated: "2026-04-23T00:53:17.679Z"
+last_updated: "2026-04-23T03:00:00.000Z"
 last_activity: 2026-04-23
 progress:
   total_phases: 6
@@ -103,6 +103,7 @@ Recent decisions affecting current work:
 | 260412-n69 | 기존 OAuth 사용자 로그인 시 프로필 설정 화면 오표시 수정 (profileReady 플래그) | 2026-04-12 | 44d07b9 | [260412-n69-social-login-profile-setup-bug](./quick/260412-n69-social-login-profile-setup-bug/) |
 | 260412-ndx | 팀 선택 저장 안됨 수정 — slug↔UUID 변환 (회원가입+마이페이지) | 2026-04-12 | 59be169 | [260412-ndx-team-save-fix](./quick/260412-ndx-team-save-fix/) |
 | 260423-fi3 | PR #4 코드리뷰 3건 수정 (MAX_PHOTOS 10→7, refreshData 이중 페치, VIDEO/PHOTO i18n) | 2026-04-23 | 1a9e911 | [260423-fi3-pr4-review-fixes](./quick/260423-fi3-pr4-review-fixes/) |
+| 260423-glr | 원격 Supabase seed 목업 데이터 제거 (pg1~5 + fan1~9 + timeline, 실사용자 1명 유지) | 2026-04-23 | _pending_ | [260423-glr-cli-qa](./quick/260423-glr-cli-qa/) |
 
 ## Session Continuity
 
