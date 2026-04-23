@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Database Foundation & Security** - 모든 신규 테이블 생성, RLS 정책 적용, 보안 취약점 제거
 - [x] **Phase 2: Authentication** - OAuth 4종 연동, AuthContext Supabase 전환, 사용자 프로필 시스템
 - [x] **Phase 3: Community** - 커뮤니티 게시판 전체 Supabase 연동 (CRUD, 검색, 트렌딩, R2 이미지 업로드)
-- [ ] **Phase 4: Photographer** - 포토그래퍼 갤러리 완성 (심사, 영상, 이미지 처리, 등급)
+- [x] **Phase 4: Photographer** - 포토그래퍼 갤러리 완성 (심사, 영상, 이미지 처리, 등급) _(2026-04-15)_
 - [ ] **Phase 5: Admin** - 어드민 웹 20페이지 Supabase 연동 및 배포
 - [ ] **Phase 6: Notifications & Polish** - 인앱/푸시 알림, 에러 모니터링, 최종 마무리
 
@@ -85,13 +85,20 @@ Plans:
   2. 포토그래퍼 신청을 제출하면 어드민 심사 대기 상태가 되고, 승인/거절 결과가 반영된다
   3. 영상을 최대 3개 업로드할 수 있고, 앱 내에서 네이티브 재생이 가능하다
   4. 포토그래퍼 프로필에 등급(포스트 수 + 팔로워 기반)이 표시되고, 치어리더 태깅이 동작한다
-**Plans**: TBD
+**Plans**: 10 plans (5 initial + 5 gap closure)
 **UI hint**: yes
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
-- [ ] 04-03: TBD
+- [x] 04-01-PLAN.md — Wave 0: 029~032 마이그레이션 + get-upload-url SIZE_LIMIT 50MB + generate-thumbnails EF (magick-wasm) + pgTAP 5 파일 + expo-video 설치 + [BLOCKING] supabase db push & functions deploy
+- [x] 04-02-PLAN.md — Wave 1: types 확장 (PhotoPost videos/thumbnail_urls, Photographer grade, Cheerleader DB schema, PhotographerApplication) + photographerApi 신규 4종 (submit/fetchMyApp/fetchCheerleaders/fetchCollectionPosts) + 페이지네이션 + photographerGrade util + r2Upload contentTypes[]
+- [x] 04-03-PLAN.md — Wave 2: PhotographerContext Supabase 전면 전환 (mock 제거, togglePhotoLike/toggleFollow userId 주입, 컬렉션 await, loadMorePhotoPosts) + mockPhotographers/mockCheerleaders 삭제
+- [x] 04-04-PLAN.md — Wave 3a: VideoPlayer (expo-video) + GradeBadge + PhotographerCard 통합 + UploadPostScreen 영상 검증/업로드/썸네일 fire-and-forget + i18n 33 keys + bronze 토큰
+- [x] 04-05-PLAN.md — Wave 3b: StudioScreen state machine (null/pending/approved/rejected) + PhotographerRegisterScreen Step 4 재설계 + PhotographerProfileScreen 헤더 GradeBadge + CollectionDetailScreen async fetch + MainTabNavigator 탭 분기 + [BLOCKING] Manual QA matrix 완주
+- [x] 04-06-PLAN.md — Wave 4 (gap closure): HI-01 StudioScreen cancelled guard + HI-02 MainTabNavigator is_photographer-first bootstrap + HI-03 033 partial unique index (pending per user) + pgTAP + [BLOCKING] supabase db push
+- [x] 04-07-PLAN.md — Wave 5 (gap closure): expo-video native module blocker 해소 — EAS dev build 재생성 + 시뮬레이터 install + fresh start 검증 [BLOCKING user checkpoint] + docs/dev-environment-setup.md native-rebuild 프로토콜 + phase4-qa-matrix.md / 04-HUMAN-UAT.md 사전 준비 체크리스트 보강
+- [x] 04-08-PLAN.md — Wave 6 (gap closure): UAT Test 4 해소 — PhotographerContext 에 myApplication state + submitPhotographerApplication wrapper + refreshMyApplication 추가 → PhotographerRegisterScreen / MainTabNavigator / StudioScreen 이 Context 구독으로 전환되어 신청 제출 직후 Studio 탭 label/icon 실시간 전환
+- [x] 04-09-PLAN.md — Wave 6 (gap closure): UAT Test 11/12/13 해소 — PostDetailScreen hero 가 images+videos 통합 media 배열을 Image / VideoPlayer(mode='detail') 분기 렌더 + HomeScreen trending 그리드 FlatList + viewport-aware VideoPlayer(mode='feed') + AllPosts/FeaturedAll/PhotographerProfile/Archive 카드 play overlay + thumbnail_urls fallback
+- [x] 04-10-PLAN.md — Wave 7 (gap closure): UAT Test 12 재개 — UploadPostScreen 영상-only submit 허용 (canPublish OR 조건 + doPublish image skip + handleClose dirty-check) + 5 피드 surface (HomeScreen featured / AllPosts / FeaturedAll / PhotographerProfile / Archive) 에 trending 패턴 복제 VideoPlayer(mode='feed', isVisible) + StudioScreen/CollectionDetailScreen 영상-only fallback poster (mode='studio')
 
 ### Phase 5: Admin
 **Goal**: 관리자가 어드민 웹에서 사용자, 커뮤니티, 포토그래퍼, 공지사항을 실제 데이터로 관리할 수 있는 상태
@@ -139,6 +146,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Database Foundation & Security | 3/3 | Complete | 2026-04-06 |
 | 2. Authentication | 5/5 | Complete | 2026-04-10 |
 | 3. Community | 5/5 | Complete | 2026-04-12 |
-| 4. Photographer | 0/3 | Not started | - |
+| 4. Photographer | 10/10 | Complete (UAT Test 12 resolved via 04-10) | 2026-04-21 |
 | 5. Admin | 0/3 | Not started | - |
 | 6. Notifications & Polish | 0/3 | Not started | - |

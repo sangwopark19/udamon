@@ -8,7 +8,10 @@ const config = {
     '^../../services/supabase$': '<rootDir>/src/__tests__/mocks/supabase',
     '^../services/supabase$': '<rootDir>/src/__tests__/mocks/supabase',
   },
-  testMatch: ['<rootDir>/src/__tests__/**/*.test.{ts,tsx}'],
+  testMatch: [
+    '<rootDir>/src/__tests__/**/*.test.{ts,tsx}',
+    '<rootDir>/src/**/__tests__/**/*.test.{ts,tsx}',
+  ],
   collectCoverageFrom: [
     'src/contexts/**/*.{ts,tsx}',
     'src/screens/auth/**/*.{ts,tsx}',

@@ -22,11 +22,11 @@ import { usePhotographer } from '../../contexts/PhotographerContext';
 import { useNotification } from '../../contexts/NotificationContext';
 import { formatCount } from '../../utils/time';
 import TeamFilterBar from '../../components/common/TeamFilterBar';
+import VideoPlayer from '../../components/common/VideoPlayer';
 import type { PhotoPost } from '../../types/photographer';
 import type { RootStackParamList, MainTabParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius, layout, shadow, spacing } from '../../styles/theme';
 import { ExploreSkeleton } from '../../components/common/Skeleton';
-import { MOCK_CHEERLEADERS } from '../../data/mockCheerleaders';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,7 +50,7 @@ export default function ExploreScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<MainTabParamList, 'Explore'>>();
   const { user } = useAuth();
-  const { photoPosts, players } = usePhotographer();
+  const { photoPosts, players, cheerleaders } = usePhotographer();
   const { unreadCount: notifUnread } = useNotification();
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(
@@ -110,6 +110,11 @@ export default function ExploreScreen() {
   /* ── Render: HOT card (2-col) ── */
   const renderHotCard = (post: PhotoPost) => {
     const td = KBO_TEAMS.find((t) => t.id === post.team_id);
+    // IN-09: video-first fallback — thumbnail → images[0] → studio-mode VideoPlayer (first frame) → grey placeholder.
+    // ExploreScreen 은 FlatList 가 아니라 ScrollView 기반이라 viewport autoplay 없음 (studio mode).
+    const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+    const hasVideo = (post.videos?.length ?? 0) > 0;
+    const videoUri = post.videos?.[0];
     return (
       <TouchableOpacity
         key={post.id}
@@ -118,7 +123,18 @@ export default function ExploreScreen() {
         onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
       >
         <View style={styles.hotImageWrap}>
-          <Image source={{ uri: post.images[0] }} style={styles.hotImage} />
+          {previewUri ? (
+            <Image source={{ uri: previewUri }} style={styles.hotImage} />
+          ) : hasVideo && videoUri ? (
+            <VideoPlayer
+              uri={videoUri}
+              mode="studio"
+              width={HOT_CARD_WIDTH}
+              height={(HOT_CARD_WIDTH * 4) / 3}
+            />
+          ) : (
+            <View style={[styles.hotImage, { backgroundColor: colors.surface }]} />
+          )}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             locations={[0.3, 1]}
@@ -135,6 +151,11 @@ export default function ExploreScreen() {
             <Text style={styles.hotBadgeEmoji}>{'\uD83D\uDD25'}</Text>
             <Text style={styles.hotBadgeText}>HOT</Text>
           </View>
+          {hasVideo && (
+            <View style={styles.hotVideoBadge}>
+              <Ionicons name="play" size={12} color="#FFFFFF" />
+            </View>
+          )}
           {/* Bottom info */}
           <View style={styles.hotBottomInfo}>
             <Text style={styles.hotPhotographer} numberOfLines={1}>
@@ -157,6 +178,10 @@ export default function ExploreScreen() {
   /* ── Render: List item ── */
   const renderListItem = (post: PhotoPost) => {
     const td = KBO_TEAMS.find((t) => t.id === post.team_id);
+    // IN-09: video-first fallback for list thumbnail — ScrollView 내부 (no viewport autoplay).
+    const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+    const hasVideo = (post.videos?.length ?? 0) > 0;
+    const videoUri = post.videos?.[0];
     return (
       <TouchableOpacity
         key={post.id}
@@ -165,10 +190,26 @@ export default function ExploreScreen() {
         onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
       >
         <View style={styles.listThumbWrap}>
-          <Image source={{ uri: post.images[0] }} style={styles.listThumb} />
+          {previewUri ? (
+            <Image source={{ uri: previewUri }} style={styles.listThumb} />
+          ) : hasVideo && videoUri ? (
+            <VideoPlayer
+              uri={videoUri}
+              mode="studio"
+              width={100}
+              height={80}
+            />
+          ) : (
+            <View style={[styles.listThumb, { backgroundColor: colors.surface }]} />
+          )}
           {td && (
             <View style={[styles.listTeamBadge, { backgroundColor: td.color }]}>
               <Text style={styles.listTeamBadgeText}>{td.shortName}</Text>
+            </View>
+          )}
+          {hasVideo && (
+            <View style={styles.listVideoBadge}>
+              <Ionicons name="play" size={10} color="#FFFFFF" />
             </View>
           )}
         </View>
@@ -307,7 +348,7 @@ export default function ExploreScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.cheerScroll}
           >
-            {MOCK_CHEERLEADERS.map((cl) => {
+            {cheerleaders.map((cl) => {
               const team = KBO_TEAMS.find((t) => t.id === cl.team_id);
               return (
                 <TouchableOpacity
@@ -317,8 +358,7 @@ export default function ExploreScreen() {
                   onPress={() => navigation.navigate('CheerleaderProfile', { cheerleaderId: cl.id })}
                 >
                   <View style={styles.cheerInfo}>
-                    <Text style={styles.cheerName} numberOfLines={1}>{cl.name}</Text>
-                    <Text style={styles.cheerDesc} numberOfLines={1}>{cl.description}</Text>
+                    <Text style={styles.cheerName} numberOfLines={1}>{cl.name_ko}</Text>
                     {team && (
                       <View style={[styles.cheerTeamBadge, { borderColor: team.color }]}>
                         <Text style={[styles.cheerTeamText, { color: team.color }]}>{team.shortName}</Text>
@@ -633,6 +673,17 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.heading,
     color: '#FFFFFF',
   },
+  hotVideoBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   hotBottomInfo: {
     position: 'absolute',
     bottom: 12,
@@ -698,6 +749,17 @@ const styles = StyleSheet.create({
     fontSize: fontSize.micro2,
     fontWeight: fontWeight.heading,
     color: '#FFFFFF',
+  },
+  listVideoBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listInfo: {
     flex: 1,

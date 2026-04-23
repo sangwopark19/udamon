@@ -47,6 +47,11 @@ import { colors, fontSize, fontWeight, radius, spacing } from '../../styles/them
 
 import { hapticMedium } from '../../utils/haptics';
 import AnimatedCounter from '../../components/common/AnimatedCounter';
+import VideoPlayer from '../../components/common/VideoPlayer';
+
+type HeroMediaItem =
+  | { kind: 'image'; uri: string }
+  | { kind: 'video'; uri: string };
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -71,9 +76,23 @@ export default function PostDetailScreen() {
   const { postId } = route.params;
   const {
     getPhotoPost, getPhotographer, isPhotoLiked, togglePhotoLike,
-    getCommentsForPost, addComment, deleteComment, toggleCommentLike, isCommentLiked,
+    getCommentsForPost, addComment, deleteComment,
     deletePhotoPost,
   } = usePhotographer();
+
+  // Plan 04 hand-off: toggleCommentLike / isCommentLiked 가 PhotographerContext 에서 제거됨 (Plan 03 D-22).
+  // Plan 05 에서 photo_likes target_type='comment' DB 트리거 검증 후 context 재추가 예정.
+  // 현재는 로컬 state stub — 재렌더 시 초기화되나 UI 동작은 유지.
+  const [localLikedComments, setLocalLikedComments] = useState<Set<string>>(new Set());
+  const isCommentLiked = (commentId: string) => localLikedComments.has(commentId);
+  const toggleCommentLike = (commentId: string) => {
+    setLocalLikedComments((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+  };
   const { user } = useAuth();
   const { isPostSaved, toggleSavePost } = useArchive();
   const requireLogin = useLoginGate();
@@ -168,7 +187,14 @@ export default function PostDetailScreen() {
 
   const photographer = getPhotographer(post.photographer_id);
   const team = KBO_TEAMS.find((t) => t.id === post.team_id);
-  const gallery = post.images;
+  // Plan 04-09 gap closure — images + videos 통합 media 배열 렌더
+  const gallery: HeroMediaItem[] = useMemo(
+    () => [
+      ...post.images.map<HeroMediaItem>((uri) => ({ kind: 'image', uri })),
+      ...post.videos.map<HeroMediaItem>((uri) => ({ kind: 'video', uri })),
+    ],
+    [post.images, post.videos],
+  );
   const liked = isPhotoLiked(postId);
   const saved = isPostSaved(postId);
   const isOwner = user?.id === post.photographer_id;
@@ -342,32 +368,43 @@ export default function PostDetailScreen() {
               onMomentumScrollEnd={onHeroScroll}
               getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
               renderItem={({ item }) => (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  onPress={() => {
-                    handleDoubleTap();
-                    // Single-tap fullscreen handled after double-tap window
-                    setTimeout(() => {
-                      if (Date.now() - lastTapRef.current >= 300) {
-                        setFullscreenVisible(true);
-                      }
-                    }, 310);
-                  }}
-                  style={styles.heroSlide}
-                >
-                  {/* #14 Inline pinch zoom */}
-                  <ScrollView
-                    maximumZoomScale={2.5}
-                    minimumZoomScale={1}
-                    showsHorizontalScrollIndicator={false}
-                    showsVerticalScrollIndicator={false}
-                    bouncesZoom
-                    centerContent
-                    contentContainerStyle={{ flex: 1 }}
+                item.kind === 'video' ? (
+                  <View style={styles.heroSlide}>
+                    <VideoPlayer
+                      uri={item.uri}
+                      mode="detail"
+                      width={SCREEN_WIDTH}
+                      height={(SCREEN_WIDTH * 4) / 3}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      handleDoubleTap();
+                      // Single-tap fullscreen handled after double-tap window
+                      setTimeout(() => {
+                        if (Date.now() - lastTapRef.current >= 300) {
+                          setFullscreenVisible(true);
+                        }
+                      }, 310);
+                    }}
+                    style={styles.heroSlide}
                   >
-                    <Image source={{ uri: item }} style={styles.heroImage} />
-                  </ScrollView>
-                </TouchableOpacity>
+                    {/* #14 Inline pinch zoom */}
+                    <ScrollView
+                      maximumZoomScale={2.5}
+                      minimumZoomScale={1}
+                      showsHorizontalScrollIndicator={false}
+                      showsVerticalScrollIndicator={false}
+                      bouncesZoom
+                      centerContent
+                      contentContainerStyle={{ flex: 1 }}
+                    >
+                      <Image source={{ uri: item.uri }} style={styles.heroImage} />
+                    </ScrollView>
+                  </TouchableOpacity>
+                )
               )}
             />
             <LinearGradient
@@ -404,14 +441,23 @@ export default function PostDetailScreen() {
         {/* Thumbnails */}
         {gallery.length > 1 && (
           <View style={styles.thumbnailRow}>
-            {gallery.map((uri, idx) => (
+            {gallery.map((item, idx) => (
               <TouchableOpacity
                 key={idx}
                 style={[styles.thumbnail, idx === activeIdx && styles.thumbnailActive]}
                 onPress={() => scrollToIdx(idx)}
                 activeOpacity={0.8}
+                accessibilityLabel={item.kind === 'video' ? t('a11y_video_preview') : undefined}
               >
-                <Image source={{ uri }} style={styles.thumbnailImage} />
+                <Image
+                  source={{ uri: item.kind === 'video' ? (post.thumbnail_urls?.[0] ?? item.uri) : item.uri }}
+                  style={styles.thumbnailImage}
+                />
+                {item.kind === 'video' && (
+                  <View style={styles.thumbVideoOverlay}>
+                    <Ionicons name="play" size={14} color="#FFFFFF" />
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -467,7 +513,7 @@ export default function PostDetailScreen() {
                 onPress={() => navigation.navigate('CheerleaderProfile', { cheerleaderId: post.cheerleader_id! })}
               >
                 <Ionicons name="heart" size={10} color={colors.error} />
-                <Text style={styles.playerChipText}>{post.cheerleader.name}</Text>
+                <Text style={styles.playerChipText}>{post.cheerleader.name_ko}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -826,16 +872,20 @@ export default function PostDetailScreen() {
             }}
             renderItem={({ item }) => (
               <View style={styles.fullscreenSlide}>
-                <ScrollView
-                  maximumZoomScale={3}
-                  minimumZoomScale={1}
-                  showsHorizontalScrollIndicator={false}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.zoomContainer}
-                  bouncesZoom
-                >
-                  <Image source={{ uri: item }} style={styles.fullscreenImage} />
-                </ScrollView>
+                {item.kind === 'video' ? (
+                  <VideoPlayer uri={item.uri} mode="detail" width={SCREEN_WIDTH} height={SCREEN_HEIGHT} />
+                ) : (
+                  <ScrollView
+                    maximumZoomScale={3}
+                    minimumZoomScale={1}
+                    showsHorizontalScrollIndicator={false}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.zoomContainer}
+                    bouncesZoom
+                  >
+                    <Image source={{ uri: item.uri }} style={styles.fullscreenImage} />
+                  </ScrollView>
+                )}
               </View>
             )}
           />
@@ -934,6 +984,12 @@ const styles = StyleSheet.create({
   },
   thumbnailImage: {
     width: '100%', height: '100%', resizeMode: 'cover',
+  },
+  thumbVideoOverlay: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
   },
 
   // ─── Engagement Stats ───

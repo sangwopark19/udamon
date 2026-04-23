@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   Image,
   TouchableOpacity,
   Animated,
@@ -12,6 +13,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -27,11 +29,13 @@ import { useRank } from '../../contexts/RankContext';
 import RankBadge from '../../components/common/RankBadge';
 import RankProgressBar from '../../components/common/RankProgressBar';
 import AwardsList from '../../components/photographer/AwardsList';
+import GradeBadge from '../../components/photographer/GradeBadge';
 import ThankYouWall from '../../components/photographer/ThankYouWall';
 import { KBO_TEAMS } from '../../constants/teams';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
 import { formatCount } from '../../utils/time';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'PhotographerProfile'>;
@@ -53,8 +57,13 @@ export default function PhotographerProfileScreen() {
 
   const {
     getPhotographer, getPhotoPostsByPhotographer, isFollowing, toggleFollow,
-    getCollectionsForPg, createCollection, deleteCollection, updatePhotographer,
+    getCollectionsForPg, createCollection, deleteCollection,
   } = usePhotographer();
+  // TODO (Phase 5 admin): Plan 03 Context 에서 updatePhotographer 제거됨.
+  // Phase 5 에서 photographerApi.updatePhotographer RPC 추가 후 await 전환 예정.
+  const updatePhotographer = (_photographerId: string, _patch: { display_name?: string; bio?: string }): void => {
+    console.warn('[PhotographerProfile] updatePhotographer 미구현 — Phase 5 photographerApi 이관 대상');
+  };
   const { user } = useAuth();
   const requireLogin = useLoginGate();
 
@@ -70,6 +79,20 @@ export default function PhotographerProfileScreen() {
   const [newColEmoji, setNewColEmoji] = useState(COLLECTION_EMOJIS[0]);
   const visiblePosts = posts.slice(0, visibleCount);
   const hasMore = visibleCount < posts.length;
+
+  // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
+  // WR-05: id 기반 tracking 으로 통일. useRef(handler).current 는 FlatList 제약.
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const ids = new Set<string>();
+    viewableItems.forEach((vt) => {
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
+    });
+    setVisibleIds(ids);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const pgCollections = useMemo(() => getCollectionsForPg(photographerId), [photographerId, getCollectionsForPg]);
 
@@ -234,8 +257,16 @@ export default function PhotographerProfileScreen() {
           {/* Name + Badge */}
           <View style={styles.nameRow}>
             <Text style={styles.displayName}>{photographer.display_name}</Text>
+            <View style={styles.gradeBadgeWrap}>
+              <GradeBadge grade={photographer.grade} variant="icon-label" size="md" />
+            </View>
             {photographer.is_verified && (
-              <Ionicons name="checkmark-circle" size={18} color={colors.verified} />
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={colors.verified}
+                style={{ marginLeft: 8 }}
+              />
             )}
             <RankBadge tier={rankTier} progress={rankProgress} />
           </View>
@@ -330,7 +361,15 @@ export default function PhotographerProfileScreen() {
         </View>
 
         {/* Featured Post */}
-        {featuredPost && (
+        {featuredPost && (() => {
+          // IN-10: featured 카드도 video-first 패턴 — thumbnail → images[0] → studio-mode VideoPlayer (first frame) → grey placeholder.
+          // sectionWrap paddingHorizontal=16 이므로 너비 = SCREEN_WIDTH - 32.
+          const featuredPreviewUri = featuredPost.thumbnail_urls?.[0] ?? featuredPost.images[0];
+          const featuredHasVideo = (featuredPost.videos?.length ?? 0) > 0;
+          const featuredVideoUri = featuredPost.videos?.[0];
+          const FEATURED_WIDTH = SCREEN_WIDTH - 32;
+          const FEATURED_HEIGHT = 220;
+          return (
           <View style={styles.sectionWrap}>
             <Text style={styles.sectionHeading}>
               {'\uD83D\uDCCC'} {t('pg_featured_post')}
@@ -340,11 +379,27 @@ export default function PhotographerProfileScreen() {
               activeOpacity={0.85}
               onPress={() => navigation.navigate('PostDetail', { postId: featuredPost.id })}
             >
-              <Image source={{ uri: featuredPost.images[0] }} style={styles.featuredImage} />
+              {featuredPreviewUri ? (
+                <Image source={{ uri: featuredPreviewUri }} style={styles.featuredImage} />
+              ) : featuredHasVideo && featuredVideoUri ? (
+                <VideoPlayer
+                  uri={featuredVideoUri}
+                  mode="studio"
+                  width={FEATURED_WIDTH}
+                  height={FEATURED_HEIGHT}
+                />
+              ) : (
+                <View style={[styles.featuredImage, { backgroundColor: colors.surface }]} />
+              )}
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.85)']}
                 style={styles.featuredGradient}
               />
+              {featuredHasVideo && (
+                <View style={styles.featuredVideoBadge}>
+                  <Ionicons name="play" size={14} color="#FFFFFF" />
+                </View>
+              )}
               <View style={styles.featuredContent}>
                 <Text style={styles.featuredTitle} numberOfLines={1}>{featuredPost.title}</Text>
                 {featuredPost.description ? (
@@ -366,7 +421,8 @@ export default function PhotographerProfileScreen() {
               </View>
             </TouchableOpacity>
           </View>
-        )}
+          );
+        })()}
 
         {/* Collections — hide when photographer has none and not own profile */}
         {(isOwnProfile || pgCollections.length > 0) && (
@@ -432,34 +488,61 @@ export default function PhotographerProfileScreen() {
             <Text style={styles.emptyPostsText}>{t('empty_no_posts')}</Text>
           </View>
         ) : (
-          <View style={styles.postGrid}>
-            {visiblePosts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={styles.postThumb}
-                activeOpacity={0.85}
-                onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-              >
-                <Image source={{ uri: post.images[0] }} style={styles.postThumbImage} />
-                {post.images.length > 1 && (
-                  <View style={styles.multiIcon}>
-                    <Ionicons name="copy-outline" size={12} color="#FFFFFF" />
-                  </View>
-                )}
-                <View style={styles.thumbOverlay}>
-                  <View style={styles.thumbStat}>
-                    <Ionicons name="heart" size={10} color="#FFFFFF" />
-                    <Text style={styles.thumbStatText}>{formatCount(post.like_count)}</Text>
-                  </View>
-                  {post.player && (
-                    <Text style={styles.thumbPlayerTag} numberOfLines={1}>
-                      #{post.player.name_ko}
-                    </Text>
+          <FlatList
+            data={visiblePosts}
+            keyExtractor={(item) => item.id}
+            numColumns={GRID_COLS}
+            scrollEnabled={false}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            columnWrapperStyle={{ gap: GRID_GAP }}
+            contentContainerStyle={{ gap: GRID_GAP }}
+            renderItem={({ item: post }) => {
+              const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+              const hasVideo = (post.videos?.length ?? 0) > 0;
+              const videoUri = post.videos?.[0];
+              const isVisible = visibleIds.has(post.id);
+              return (
+                <TouchableOpacity
+                  style={styles.postThumb}
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                >
+                  {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+                  {hasVideo && videoUri ? (
+                    <VideoPlayer
+                      uri={videoUri}
+                      mode="feed"
+                      width={THUMB_SIZE}
+                      height={THUMB_SIZE}
+                      isVisible={isVisible}
+                    />
+                  ) : previewUri ? (
+                    <Image source={{ uri: previewUri }} style={styles.postThumbImage} />
+                  ) : (
+                    <View style={[styles.postThumbImage, { backgroundColor: colors.surface }]} />
                   )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  {/* videoPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
+                  {post.images.length > 1 && !hasVideo && (
+                    <View style={styles.multiIcon}>
+                      <Ionicons name="copy-outline" size={12} color="#FFFFFF" />
+                    </View>
+                  )}
+                  <View style={styles.thumbOverlay}>
+                    <View style={styles.thumbStat}>
+                      <Ionicons name="heart" size={10} color="#FFFFFF" />
+                      <Text style={styles.thumbStatText}>{formatCount(post.like_count)}</Text>
+                    </View>
+                    {post.player && (
+                      <Text style={styles.thumbPlayerTag} numberOfLines={1}>
+                        #{post.player.name_ko}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
         )}
 
         {hasMore && (
@@ -678,6 +761,9 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.heading,
     color: colors.textPrimary,
   },
+  gradeBadgeWrap: {
+    marginLeft: 8,
+  },
   bio: {
     fontSize: fontSize.body,
     fontWeight: fontWeight.body,
@@ -798,6 +884,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 140,
+  },
+  featuredVideoBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   featuredContent: {
     position: 'absolute',
@@ -996,6 +1093,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  videoPlayOverlay: {
+    position: 'absolute', top: 6, right: 6,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
   },
   thumbOverlay: {
     position: 'absolute',

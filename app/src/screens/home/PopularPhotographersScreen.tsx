@@ -20,6 +20,7 @@ import { formatCount } from '../../utils/time';
 import type { Photographer } from '../../types/photographer';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import GradeBadge from '../../components/photographer/GradeBadge';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type SortMode = 'popular' | 'latest';
@@ -72,6 +73,7 @@ export default function PopularPhotographersScreen() {
         <View style={styles.cardInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>{pg.display_name}</Text>
+            <GradeBadge grade={pg.grade} variant="icon" />
             {pg.is_verified && <Ionicons name="checkmark-circle" size={14} color={colors.primary} />}
           </View>
           {team && <Text style={[styles.teamName, { color: team.color }]}>{team.shortName}</Text>}

@@ -1,16 +1,16 @@
 import { useCallback } from 'react';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useAuth } from '../contexts/AuthContext';
-import type { RootStackParamList } from '../types/navigation';
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+import { navigationRef } from '../navigation/navigationRef';
 
 /**
  * Returns a guard function that checks authentication.
  * If the user is a guest, it navigates to the Login screen and returns false.
  * If authenticated, it returns true so the caller can proceed.
+ *
+ * Uses a module-level navigationRef instead of useNavigation so the hook
+ * can be called from providers rendered outside NavigationContainer
+ * (e.g. PhotographerProvider).
  *
  * Usage:
  *   const requireLogin = useLoginGate();
@@ -18,15 +18,16 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
  */
 export function useLoginGate() {
   const { isGuest } = useAuth();
-  const navigation = useNavigation<Nav>();
 
   const requireLogin = useCallback((): boolean => {
     if (isGuest) {
-      navigation.navigate('Login');
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Login');
+      }
       return false;
     }
     return true;
-  }, [isGuest, navigation]);
+  }, [isGuest]);
 
   return requireLogin;
 }

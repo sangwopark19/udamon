@@ -6,3 +6,5 @@ dist/
 .env.*.local
 *.tsbuildinfo
 .expo/
+
+/docs/PHASE1-TEST-GUIDE.md

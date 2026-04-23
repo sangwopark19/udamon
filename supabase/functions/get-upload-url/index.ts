@@ -9,14 +9,13 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     "image/webp",
     "video/mp4",
     "video/quicktime",
-    "video/webm",
   ],
   "community-posts": ["image/jpeg", "image/png", "image/webp"],
   avatars: ["image/jpeg", "image/png", "image/webp"],
 };
 
 const SIZE_LIMITS: Record<string, number> = {
-  "photo-posts": 30 * 1024 * 1024,
+  "photo-posts": 50 * 1024 * 1024,  // v1: 이미지 30MB / 영상 50MB 허용 (영상 최대값 기준 — Phase 4 T-4-02)
   "community-posts": 10 * 1024 * 1024,
   avatars: 5 * 1024 * 1024,
 };
@@ -69,7 +68,6 @@ function getExtension(contentType: string): string {
     "image/webp": "webp",
     "video/mp4": "mp4",
     "video/quicktime": "mov",
-    "video/webm": "webm",
   };
   return map[contentType] ?? "bin";
 }

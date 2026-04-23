@@ -28,7 +28,10 @@ export default function FollowingListScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
-  const { photographers, followedPgIds, followerPgIds, toggleFollow, isFollowing } = usePhotographer();
+  const { photographers, followedPgIds, toggleFollow, isFollowing } = usePhotographer();
+  // TODO (Phase 5): Plan 03 Context 에서 followerPgIds (mock 의존) 제거됨.
+  // Phase 5 에서 photographerApi.fetchFollowers(userId) 또는 inverse query 로 교체 예정.
+  const followerPgIds = useMemo(() => new Set<string>(), []);
 
   const [activeTab, setActiveTab] = useState<Tab>(route.params?.initialTab ?? 'following');
 

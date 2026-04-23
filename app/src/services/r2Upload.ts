@@ -60,24 +60,36 @@ async function putToR2(uploadUrl: string, localUri: string, contentType: string)
   }
 }
 
+// WR-01: 이미지 Content-Type 을 uploadPostVideos 와 동일하게 호출자로부터 주입받음.
+// 기본값은 JPEG (optimizeImage 가 JPEG 로 normalize 하므로 기존 호출자는 그대로 동작).
+// Edge Function 의 photo-posts allowlist 는 image/jpeg|image/png|image/webp 를 허용.
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'] as const;
+type AllowedImageMime = (typeof ALLOWED_IMAGE_MIME)[number];
+
+function isAllowedImageMime(ct: string): ct is AllowedImageMime {
+  return (ALLOWED_IMAGE_MIME as readonly string[]).includes(ct);
+}
+
 export async function uploadPostImages(
-  userId: string,
   localUris: string[],
   accessToken: string,
+  contentTypes?: string[],
 ): Promise<UploadResult> {
   try {
-    const { uploads } = await getPresignedUrls(
-      accessToken,
-      'photo-posts',
-      'image/jpeg',
-      localUris.length,
-    );
-
+    const types = contentTypes ?? localUris.map(() => 'image/jpeg');
+    if (types.length !== localUris.length) {
+      return { data: null, error: 'contentTypes length must match localUris length' };
+    }
     const publicUrls: string[] = [];
 
     for (let i = 0; i < localUris.length; i++) {
-      await putToR2(uploads[i].uploadUrl, localUris[i], 'image/jpeg');
-      publicUrls.push(uploads[i].publicUrl);
+      const ct = types[i];
+      if (!isAllowedImageMime(ct)) {
+        return { data: null, error: `Unsupported image mime: ${ct}` };
+      }
+      const { uploads } = await getPresignedUrls(accessToken, 'photo-posts', ct, 1);
+      await putToR2(uploads[0].uploadUrl, localUris[i], ct);
+      publicUrls.push(uploads[0].publicUrl);
     }
 
     return { data: publicUrls, error: null };
@@ -87,25 +99,28 @@ export async function uploadPostImages(
   }
 }
 
+// ADJ-02: asset 별로 contentType (video/mp4 또는 video/quicktime) 을 동적으로 받음.
+// localUris 와 contentTypes 는 1:1 대응 길이여야 하며, 각 asset 별로 별도의
+// get-upload-url 호출이 발생한다 (Edge Function 이 호출당 단일 contentType + count 가정).
 export async function uploadPostVideos(
-  userId: string,
   localUris: string[],
   accessToken: string,
-  contentType = 'video/mp4',
+  contentTypes: string[],
 ): Promise<UploadResult> {
   try {
-    const { uploads } = await getPresignedUrls(
-      accessToken,
-      'photo-posts',
-      contentType,
-      localUris.length,
-    );
-
+    if (contentTypes.length !== localUris.length) {
+      return { data: null, error: 'contentTypes length must match localUris length' };
+    }
     const publicUrls: string[] = [];
 
     for (let i = 0; i < localUris.length; i++) {
-      await putToR2(uploads[i].uploadUrl, localUris[i], contentType);
-      publicUrls.push(uploads[i].publicUrl);
+      const contentType = contentTypes[i];
+      if (contentType !== 'video/mp4' && contentType !== 'video/quicktime') {
+        return { data: null, error: `Unsupported video mime: ${contentType}` };
+      }
+      const { uploads } = await getPresignedUrls(accessToken, 'photo-posts', contentType, 1);
+      await putToR2(uploads[0].uploadUrl, localUris[i], contentType);
+      publicUrls.push(uploads[0].publicUrl);
     }
 
     return { data: publicUrls, error: null };
@@ -116,23 +131,25 @@ export async function uploadPostVideos(
 }
 
 export async function uploadCommunityImages(
-  userId: string,
   localUris: string[],
   accessToken: string,
+  contentTypes?: string[],
 ): Promise<UploadResult> {
   try {
-    const { uploads } = await getPresignedUrls(
-      accessToken,
-      'community-posts',
-      'image/jpeg',
-      localUris.length,
-    );
-
+    const types = contentTypes ?? localUris.map(() => 'image/jpeg');
+    if (types.length !== localUris.length) {
+      return { data: null, error: 'contentTypes length must match localUris length' };
+    }
     const publicUrls: string[] = [];
 
     for (let i = 0; i < localUris.length; i++) {
-      await putToR2(uploads[i].uploadUrl, localUris[i], 'image/jpeg');
-      publicUrls.push(uploads[i].publicUrl);
+      const ct = types[i];
+      if (!isAllowedImageMime(ct)) {
+        return { data: null, error: `Unsupported image mime: ${ct}` };
+      }
+      const { uploads } = await getPresignedUrls(accessToken, 'community-posts', ct, 1);
+      await putToR2(uploads[0].uploadUrl, localUris[i], ct);
+      publicUrls.push(uploads[0].publicUrl);
     }
 
     return { data: publicUrls, error: null };
@@ -143,19 +160,22 @@ export async function uploadCommunityImages(
 }
 
 export async function uploadAvatar(
-  userId: string,
   localUri: string,
   accessToken: string,
+  contentType: string = 'image/jpeg',
 ): Promise<{ data: string | null; error: string | null }> {
   try {
+    if (!isAllowedImageMime(contentType)) {
+      return { data: null, error: `Unsupported image mime: ${contentType}` };
+    }
     const { uploads } = await getPresignedUrls(
       accessToken,
       'avatars',
-      'image/jpeg',
+      contentType,
       1,
     );
 
-    await putToR2(uploads[0].uploadUrl, localUri, 'image/jpeg');
+    await putToR2(uploads[0].uploadUrl, localUri, contentType);
     return { data: uploads[0].publicUrl, error: null };
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Upload failed';

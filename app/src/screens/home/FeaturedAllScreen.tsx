@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +20,7 @@ import { usePhotographer } from '../../contexts/PhotographerContext';
 import { formatCount } from '../../utils/time';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius } from '../../styles/theme';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,6 +38,20 @@ export default function FeaturedAllScreen() {
 
   const featured = getFeaturedPosts().slice(0, MAX_FEATURED);
 
+  // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
+  // WR-05: id 기반 tracking 으로 통일. useRef(handler).current 는 FlatList 제약.
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const ids = new Set<string>();
+    viewableItems.forEach((vt) => {
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
+    });
+    setVisibleIds(ids);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -47,21 +63,46 @@ export default function FeaturedAllScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 20 }]}
+      <FlatList
+        data={featured}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: GRID_GAP, marginBottom: GRID_GAP }}
+        contentContainerStyle={{
+          paddingHorizontal: GRID_PADDING,
+          paddingTop: 16,
+          paddingBottom: Math.max(insets.bottom, 20) + 20,
+        }}
         showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.grid}>
-          {featured.map((post) => (
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        renderItem={({ item: post }) => {
+          const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+          const hasVideo = (post.videos?.length ?? 0) > 0;
+          const videoUri = post.videos?.[0];
+          const isVisible = visibleIds.has(post.id);
+          return (
             <TouchableOpacity
-              key={post.id}
               style={styles.card}
               activeOpacity={0.85}
               onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
             >
               <View style={styles.imageWrap}>
-                <Image source={{ uri: post.images[0] }} style={styles.image} />
+                {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+                {hasVideo && videoUri ? (
+                  <VideoPlayer
+                    uri={videoUri}
+                    mode="feed"
+                    width={CARD_WIDTH}
+                    height={(CARD_WIDTH * 4) / 3}
+                    isVisible={isVisible}
+                  />
+                ) : previewUri ? (
+                  <Image source={{ uri: previewUri }} style={styles.image} />
+                ) : (
+                  <View style={[styles.image, { backgroundColor: colors.surface }]} />
+                )}
+                {/* videoPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.8)']}
                   locations={[0.4, 1]}
@@ -82,16 +123,15 @@ export default function FeaturedAllScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-          ))}
-        </View>
-
-        {featured.length === 0 && (
+          );
+        }}
+        ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="camera-outline" size={40} color={colors.textTertiary} />
             <Text style={styles.emptyText}>{t('pg_no_featured')}</Text>
           </View>
-        )}
-      </ScrollView>
+        }
+      />
     </View>
   );
 }
@@ -132,6 +172,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  videoPlayOverlay: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
+  },
   gradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
   tag: {
     position: 'absolute', top: 8, left: 8,

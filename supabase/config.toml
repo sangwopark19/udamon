@@ -368,6 +368,20 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# ─── Phase 4 generate-thumbnails (Plan 04-01) ────────────────
+# verify_jwt = false: Phase 3 03-04 결정에 따라 Supabase gateway 가
+# ES256 rotation 후 user token 을 거부하는 이슈 우회 → 내부에서
+# supabase.auth.getUser(token) 로 재검증 (T-4-05 owner check 포함).
+[functions.generate-thumbnails]
+verify_jwt = false
+static_files = ["./functions/generate-thumbnails/magick.wasm"]
+
+# ─── Phase 4 get-upload-url (UAT Test 7 fix) ────────────────
+# generate-thumbnails 와 동일한 이유 — Supabase gateway 가 ES256 rotation 후
+# user JWT 를 거부해 401 반환 → 내부에서 supabase.auth.getUser(token) 로 재검증.
+[functions.get-upload-url]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

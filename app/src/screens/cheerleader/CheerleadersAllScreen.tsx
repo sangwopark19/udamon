@@ -73,8 +73,10 @@ export default function CheerleadersAllScreen() {
                   </View>
                 )}
                 <View style={styles.info}>
-                  <Text style={styles.name} numberOfLines={1}>{cl.name}</Text>
-                  <Text style={styles.desc} numberOfLines={1}>{cl.description}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{cl.name_ko}</Text>
+                  {cl.position ? (
+                    <Text style={styles.desc} numberOfLines={1}>{cl.position}</Text>
+                  ) : null}
                   {team && (
                     <View style={[styles.teamBadge, { borderColor: team.color }]}>
                       <Text style={[styles.teamText, { color: team.color }]}>{team.shortName}</Text>

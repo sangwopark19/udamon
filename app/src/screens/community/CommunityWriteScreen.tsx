@@ -133,7 +133,7 @@ export default function CommunityWriteScreen() {
         return;
       }
 
-      const uploadResult = await uploadCommunityImages(user.id, images, token);
+      const uploadResult = await uploadCommunityImages(images, token);
       if (uploadResult.error || !uploadResult.data) {
         setIsSubmitting(false);
         setUploadStep('idle');

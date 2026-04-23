@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Modal,
@@ -11,6 +12,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import type { ViewToken } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -23,6 +25,7 @@ import { useArchive } from '../../contexts/ArchiveContext';
 import { usePhotographer } from '../../contexts/PhotographerContext';
 import type { RootStackParamList } from '../../types/navigation';
 import { colors, fontSize, fontWeight, radius, layout, spacing } from '../../styles/theme';
+import VideoPlayer from '../../components/common/VideoPlayer';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type ArchiveTab = 'all' | 'folders';
@@ -45,6 +48,20 @@ export default function ArchiveScreen() {
 
   const [activeTab, setActiveTab] = useState<ArchiveTab>('all');
   const [openFolderId, setOpenFolderId] = useState<string | null>(null);
+
+  // Plan 04-10 Sub-issue B: viewport-aware VideoPlayer autoplay (HomeScreen trending 패턴 재사용, itemVisiblePercentThreshold=60)
+  // WR-05: id 기반 tracking 으로 통일. useRef(handler).current 는 FlatList 제약.
+  const [visibleIds, setVisibleIds] = useState<Set<string>>(new Set());
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const ids = new Set<string>();
+    viewableItems.forEach((vt) => {
+      if (vt.item && typeof (vt.item as { id?: string }).id === 'string') {
+        ids.add((vt.item as { id: string }).id);
+      }
+    });
+    setVisibleIds(ids);
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   // Create folder modal
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -170,30 +187,57 @@ export default function ArchiveScreen() {
 
   // ── Render helpers ──
 
-  const renderPhotoGrid = (posts: ReturnType<typeof getPhotoPost>[], allowLongPress = true) => (
-    <View style={styles.imageGrid}>
-      {posts.map((post) => {
-        if (!post) return null;
-        return (
-          <TouchableOpacity
-            key={post.id}
-            style={styles.gridItem}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
-            onLongPress={allowLongPress ? () => handlePostLongPress(post.id) : undefined}
-          >
-            <Image source={{ uri: post.images[0] }} style={styles.gridImage} />
-            {post.images.length > 1 && (
-              <View style={styles.gridMediaBadge}>
-                <Ionicons name="copy-outline" size={10} color="#FFF" />
-                <Text style={styles.gridMediaText}>{post.images.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
+  const renderPhotoGrid = (posts: ReturnType<typeof getPhotoPost>[], allowLongPress = true) => {
+    const valid = posts.filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined);
+    return (
+      <FlatList
+        data={valid}
+        keyExtractor={(item) => item.id}
+        numColumns={GRID_COLS}
+        scrollEnabled={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        columnWrapperStyle={{ gap: GRID_GAP }}
+        contentContainerStyle={{ gap: GRID_GAP }}
+        renderItem={({ item: post }) => {
+          const previewUri = post.thumbnail_urls?.[0] ?? post.images[0];
+          const hasVideo = (post.videos?.length ?? 0) > 0;
+          const videoUri = post.videos?.[0];
+          const isVisible = visibleIds.has(post.id);
+          return (
+            <TouchableOpacity
+              style={styles.gridItem}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+              onLongPress={allowLongPress ? () => handlePostLongPress(post.id) : undefined}
+            >
+              {/* Plan 04-10 Sub-issue B: video-first — 혼합/영상-only 포스트는 VideoPlayer(feed) 로 viewport autoplay */}
+              {hasVideo && videoUri ? (
+                <VideoPlayer
+                  uri={videoUri}
+                  mode="feed"
+                  width={GRID_ITEM}
+                  height={GRID_ITEM}
+                  isVisible={isVisible}
+                />
+              ) : previewUri ? (
+                <Image source={{ uri: previewUri }} style={styles.gridImage} />
+              ) : (
+                <View style={[styles.gridImage, { backgroundColor: colors.surface }]} />
+              )}
+              {/* videoPlayOverlay 제거 — VideoPlayer 가 시각적 재생 표현 담당 */}
+              {post.images.length > 1 && !hasVideo && (
+                <View style={styles.gridMediaBadge}>
+                  <Ionicons name="copy-outline" size={10} color="#FFF" />
+                  <Text style={styles.gridMediaText}>{post.images.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        }}
+      />
+    );
+  };
 
   // ── Folder detail view ──
   if (openFolder) {
@@ -607,6 +651,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  videoPlayOverlay: {
+    position: 'absolute', top: 6, right: 6,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 2,
   },
   gridMediaText: {
     fontSize: fontSize.micro2,
