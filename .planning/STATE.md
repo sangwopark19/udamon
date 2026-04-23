@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: "Phase 04 shipped — PR #4"
 stopped_at: Phase 4 plan 04-10 (UAT Test 12 gap closure) complete — awaiting verification
-last_updated: "2026-04-23T03:20:00.000Z"
-last_activity: 2026-04-23 - Completed quick task 260423-gz3: 영상 썸네일 네비게이션 수정
+last_updated: "2026-04-23T12:29:50+09:00"
+last_activity: 2026-04-23 - Completed quick task 260423-bld: Android preview APK 빌드 (commit 62a34ea)
 progress:
   total_phases: 6
   completed_phases: 4
@@ -105,10 +105,11 @@ Recent decisions affecting current work:
 | 260423-fi3 | PR #4 코드리뷰 3건 수정 (MAX_PHOTOS 10→7, refreshData 이중 페치, VIDEO/PHOTO i18n) | 2026-04-23 | 1a9e911 | [260423-fi3-pr4-review-fixes](./quick/260423-fi3-pr4-review-fixes/) |
 | 260423-glr | 원격 Supabase seed 목업 데이터 제거 (pg1~5 + fan1~9 + timeline, 실사용자 1명 유지) | 2026-04-23 | 679ded6 | [260423-glr-cli-qa](./quick/260423-glr-cli-qa/) |
 | 260423-gz3 | 안드로이드 실기기에서 영상 썸네일 탭 시 상세 네비게이션 실패 수정 (VideoView 터치 흡수 → feed/studio 모드 pointerEvents='none') | 2026-04-23 | 28dd6d7 | [260423-gz3-fix-video-thumbnail-navigation-in-best-c](./quick/260423-gz3-fix-video-thumbnail-navigation-in-best-c/) |
+| 260423-bld | Android preview APK 빌드 (EAS build `f0f87fe7`, APK: vKRu9ou3pxJgHBQJJeComM.apk) | 2026-04-23 | 62a34ea | [260423-bld-android-preview-build](./quick/260423-bld-android-preview-build/) |
 
 ## Session Continuity
 
-Last session: 2026-04-23T03:20:00.000Z
-Stopped at: Quick task 260423-gz3 완료 — 영상 썸네일 네비게이션 수정
-Resume file: .planning/quick/260423-gz3-fix-video-thumbnail-navigation-in-best-c/260423-gz3-SUMMARY.md
-Next step: 안드로이드 실기기에서 수동 리그레션 확인 → 이상 없으면 `/gsd-verify-work` (04-10 verifier) 로 Phase 4 종료 절차 진행
+Last session: 2026-04-23T12:29:50+09:00
+Stopped at: Quick task 260423-bld 완료 — Android preview APK 빌드 내부 배포용 링크 확보
+Resume file: .planning/quick/260423-bld-android-preview-build/260423-bld-SUMMARY.md
+Next step: 내부 테스터에게 APK 설치 링크 공유 (https://expo.dev/accounts/sangwopark19icons/projects/udamon/builds/f0f87fe7-14b9-4709-95fe-bb8d51e9b0fd) → 실기기 리그레션 확인 → 이상 없으면 `/gsd-verify-work` (04-10 verifier) 로 Phase 4 종료 절차 진행
