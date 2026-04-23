@@ -47,7 +47,8 @@ function AnimatedTab({
       ]).start();
     }
     prevFocused.current = isFocused;
-  }, [isFocused]);
+    // IN-07: scale 은 useRef 로 stable ref 이지만 exhaustive-deps 일관성 위해 선언.
+  }, [isFocused, scale]);
 
   return (
     <TouchableOpacity
