@@ -128,8 +128,32 @@ Deno.serve(async (req: Request) => {
   const thumbnailUrls: string[] = [];
   const failures: string[] = [];
 
+  // WR-06: imageUrl 이 R2 public URL (`${R2_PUBLIC_URL}/photo-posts/${ownerUserId}/`)
+  // 로 시작하지 않으면 거부. 임의 외부 URL 을 fetch + R2 업로드 하는 SSRF/스토리지 오용 경로 차단.
+  // 추가로 pathname 이 `/photo-posts/${ownerUserId}/` 하위인지도 확인 (new URL 의 pathname 정규화 후).
+  const expectedPrefix = `${R2_PUBLIC_URL}/photo-posts/${ownerUserId}/`;
+  const expectedPathPrefix = `/photo-posts/${ownerUserId}/`;
+
   for (const imageUrl of imageUrls) {
     try {
+      if (!imageUrl.startsWith(expectedPrefix)) {
+        console.warn('[Thumbnail] rejected non-R2 URL', imageUrl);
+        failures.push(imageUrl);
+        continue;
+      }
+      let parsedPath: string;
+      try {
+        parsedPath = new URL(imageUrl).pathname;
+      } catch {
+        failures.push(imageUrl);
+        continue;
+      }
+      if (!parsedPath.startsWith(expectedPathPrefix)) {
+        console.warn('[Thumbnail] rejected URL outside owner prefix', imageUrl);
+        failures.push(imageUrl);
+        continue;
+      }
+
       const res = await fetch(imageUrl);
       if (!res.ok) throw new Error(`download ${res.status}`);
       const buf = new Uint8Array(await res.arrayBuffer());
