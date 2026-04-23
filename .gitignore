@@ -7,4 +7,7 @@ dist/
 *.tsbuildinfo
 .expo/
 
+.claude/scheduled_tasks.lock
+.claude/worktrees/
+
 /docs/PHASE1-TEST-GUIDE.md
