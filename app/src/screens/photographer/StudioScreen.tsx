@@ -100,7 +100,10 @@ export default function StudioScreen() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, overridePhotographerId, myApplication, applicationLoading]);
+    // WR-03: myApplication 은 refresh 시마다 새 참조로 교체되므로 원시 status 만 구독.
+    // approved 분기에 필요한 단일 정보는 status 이며, 동일한 status 값 재방출에서는
+    // 불필요한 fetchPhotographerByUserId 호출이 발생하지 않도록 한다.
+  }, [user?.id, overridePhotographerId, myApplication?.status, applicationLoading]);
 
   const handleSignupCta = useCallback(() => {
     navigation.navigate('PhotographerRegister');
