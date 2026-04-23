@@ -71,7 +71,6 @@ function isAllowedImageMime(ct: string): ct is AllowedImageMime {
 }
 
 export async function uploadPostImages(
-  _userId: string,
   localUris: string[],
   accessToken: string,
   contentTypes?: string[],
@@ -104,7 +103,6 @@ export async function uploadPostImages(
 // localUris 와 contentTypes 는 1:1 대응 길이여야 하며, 각 asset 별로 별도의
 // get-upload-url 호출이 발생한다 (Edge Function 이 호출당 단일 contentType + count 가정).
 export async function uploadPostVideos(
-  userId: string,
   localUris: string[],
   accessToken: string,
   contentTypes: string[],
@@ -133,7 +131,6 @@ export async function uploadPostVideos(
 }
 
 export async function uploadCommunityImages(
-  _userId: string,
   localUris: string[],
   accessToken: string,
   contentTypes?: string[],
@@ -163,7 +160,6 @@ export async function uploadCommunityImages(
 }
 
 export async function uploadAvatar(
-  _userId: string,
   localUri: string,
   accessToken: string,
   contentType: string = 'image/jpeg',

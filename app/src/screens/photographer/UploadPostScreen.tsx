@@ -227,7 +227,7 @@ export default function UploadPostScreen() {
       let finalImages: string[] = [];
       if (images.length > 0) {
         const optimized = await Promise.all(images.map(optimizeImage));
-        const imageUpload = await photographerApi.uploadPostImages(user.id, optimized, session.access_token);
+        const imageUpload = await photographerApi.uploadPostImages(optimized, session.access_token);
         if (imageUpload.error || !imageUpload.data) {
           Alert.alert(
             t('upload_video_upload_failed_title'),
@@ -243,7 +243,6 @@ export default function UploadPostScreen() {
       let finalVideos: string[] = [];
       if (videos.length > 0) {
         const videoUpload = await photographerApi.uploadPostVideos(
-          user.id,
           videos,
           session.access_token,
           videoContentTypes,
