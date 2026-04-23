@@ -187,11 +187,16 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
   const pendingLikeOps = useRef<Set<string>>(new Set());
   const pendingFollowOps = useRef<Set<string>>(new Set());
 
-  // ─── Initial fetch / refresh ──────────────────────────────
+  // ─── Initial fetch / refresh (public data only) ───────────
   // WR-02: 개별 API 의 { data, error } 튜플에서 error 를 명시적으로 관찰하고,
   // Promise.all 바깥에서 발생하는 예외도 top-level catch 로 로깅한다.
   // 각 API 는 이미 try/catch 로 error 튜플을 반환하므로 Promise.all 자체는
   // 일반적으로 reject 되지 않지만, 방어적으로 try/catch 를 추가.
+  //
+  // PR#4-review-02: 기존에는 userId 를 의존성으로 포함해 로그인 시 public data
+  // 까지 재페치되고 setLoading(true) 가 재발화하여 UI 가 잠시 블랭크되는 문제가
+  // 있었다. refreshData 는 public data 전용으로 축소하고, user-scoped 복원은
+  // 아래 refreshUserScoped 별도 effect 로 분리한다.
   const refreshData = useCallback(async () => {
     setLoading(true);
     try {
@@ -242,35 +247,47 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
       if (eventsRes.data) setEvents(eventsRes.data);
       if (collectionsRes.data) setCollections(collectionsRes.data);
       if (commentsRes.data) setComments(commentsRes.data);
-
-      // 로그인 사용자의 좋아요/팔로우 복원 (D-22)
-      if (userId) {
-        const [likesRes, followsRes] = await Promise.all([
-          photographerApi.fetchUserPhotoLikes(userId),
-          photographerApi.fetchUserFollows(userId),
-        ]);
-        if (likesRes.error) {
-          console.warn('[PhotographerContext] fetch[likes] error', likesRes.error);
-        }
-        if (followsRes.error) {
-          console.warn('[PhotographerContext] fetch[follows] error', followsRes.error);
-        }
-        if (likesRes.data) setPhotoLikedIds(new Set(likesRes.data));
-        if (followsRes.data) setFollowedPgIds(new Set(followsRes.data));
-      } else {
-        setPhotoLikedIds(new Set());
-        setFollowedPgIds(new Set());
-      }
     } catch (e) {
       console.error('[PhotographerContext] refreshData unhandled', e);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, []);
 
   useEffect(() => {
     void refreshData();
   }, [refreshData]);
+
+  // ─── User-scoped 복원 (likes / follows) ────────────────────
+  // 로그인/로그아웃 전환 시에만 재실행. setLoading 은 호출하지 않아 public data
+  // 로딩 상태와 혼동되지 않는다 (PR#4-review-02).
+  const refreshUserScoped = useCallback(async () => {
+    if (!userId) {
+      setPhotoLikedIds(new Set());
+      setFollowedPgIds(new Set());
+      return;
+    }
+    try {
+      const [likesRes, followsRes] = await Promise.all([
+        photographerApi.fetchUserPhotoLikes(userId),
+        photographerApi.fetchUserFollows(userId),
+      ]);
+      if (likesRes.error) {
+        console.warn('[PhotographerContext] fetch[likes] error', likesRes.error);
+      }
+      if (followsRes.error) {
+        console.warn('[PhotographerContext] fetch[follows] error', followsRes.error);
+      }
+      if (likesRes.data) setPhotoLikedIds(new Set(likesRes.data));
+      if (followsRes.data) setFollowedPgIds(new Set(followsRes.data));
+    } catch (e) {
+      console.error('[PhotographerContext] refreshUserScoped unhandled', e);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    void refreshUserScoped();
+  }, [refreshUserScoped]);
 
   // ─── Application (PHOT-02 — Plan 04-08 gap closure) ───────
   const refreshMyApplication = useCallback(async () => {
