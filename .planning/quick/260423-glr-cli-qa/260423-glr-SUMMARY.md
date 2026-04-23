@@ -75,6 +75,12 @@ COMMIT;
 - JSON 백업으로 행 단위 복원 가능
 - 또는 migration `009_seed_photographer.sql` 재실행 (ON CONFLICT DO NOTHING 이라 idempotent)
 
-## Follow-up
+## Follow-up — 완료
 
-- v1 런칭 전 `009_seed_photographer.sql` migration 을 prod 적용 대상에서 제외할지 결정 필요 (현재는 `supabase db push` 시 재주입됨). 후속 phase에서 처리 권장.
+후속 조치로 `supabase/migrations/034_remove_seed_photographer_data.sql` 을 작성하고 원격에 push 했다. migration 은 idempotent DELETE 로 구성되어 있어:
+
+- 현재 prod (이미 manual cleanup 완료): 첫 적용은 no-op.
+- 향후 fresh 환경 또는 `supabase db reset`: 009 가 시드 주입 후 034 가 즉시 제거 → 최종 상태는 깨끗.
+- 로컬 dev 에서 시드를 유지하고 싶다면 별도로 `supabase/seed.sql` 을 구성해야 함 (현재 v1 scope 외).
+
+Verification: `supabase migration list --linked` 결과 local/remote 모두 034 까지 동기. 적용 후 카운트 변동 없음 (auth.users 15, photographers 1, posts 4, timeline_events 0).
