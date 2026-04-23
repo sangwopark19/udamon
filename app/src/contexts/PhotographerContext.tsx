@@ -516,12 +516,33 @@ export function PhotographerProvider({ children }: { children: ReactNode }) {
   );
 
   // PHOT-08: 컬렉션의 실제 photo posts 조회 (CollectionDetailScreen 용)
+  // WR-04: 로컬 collections/photoPosts 에 이미 매핑 정보가 있으면 로컬 우선으로
+  // 반환해 불필요한 Supabase round-trip 을 제거한다. 다만 photoPosts 가 페이지네이션
+  // 상태 (첫 PAGE_SIZE 개만 로드) 이기 때문에, collection.postIds 중 하나라도
+  // photoPosts 에서 찾지 못하면 서버 fetch 로 fallback 한다 (cold start / deep link
+  // 진입 등에서 초기 20개 밖에 없을 때 누락 방지).
   const getCollectionPosts = useCallback(
     async (collectionId: string): Promise<PhotoPost[]> => {
+      const col = collections.find((c) => c.id === collectionId);
+      if (col) {
+        const localPosts: PhotoPost[] = [];
+        let missing = false;
+        for (const pid of col.postIds) {
+          const found = photoPosts.find((p) => p.id === pid);
+          if (!found) {
+            missing = true;
+            break;
+          }
+          localPosts.push(found);
+        }
+        if (!missing) {
+          return localPosts;
+        }
+      }
       const res = await photographerApi.fetchCollectionPosts(collectionId);
       return res.data ?? [];
     },
-    [],
+    [collections, photoPosts],
   );
 
   // ─── Comments (await) ─────────────────────────────────────
