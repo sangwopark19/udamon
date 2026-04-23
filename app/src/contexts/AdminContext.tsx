@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { usePhotographer } from './PhotographerContext';
 import { useReport } from './ReportContext';
 import { useNotification } from './NotificationContext';
+import { useToast } from './ToastContext';
 import type {
   AdminStats,
   UserSanction,
@@ -54,14 +55,18 @@ const AdminContext = createContext<AdminContextValue | null>(null);
 export function AdminProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { photoPosts, photographers, deletePhotoPost } = usePhotographer();
+  const { showToast } = useToast();
   // TODO (Phase 5 admin): Plan 03 Context 에서 updatePostStatus/updatePhotographerVerification 제거됨.
-  // Phase 5 에서 adminApi 경유 호출로 교체 예정. 임시로 no-op 로 유지하여 runtime crash 방지.
-  const updatePostStatus = (_postId: string, _status: 'approved' | 'rejected', _reason?: string): void => {
+  // Phase 5 에서 adminApi 경유 호출로 교체 예정. 임시로 no-op 로 유지하되 toast 로 사용자에게 알림.
+  // IN-01: 승인/거부 버튼이 "DB 에 아무 영향 없음" 이라는 사실을 테스터/QA 가 알 수 있도록 toast 로 경고.
+  const updatePostStatus = useCallback((_postId: string, _status: 'approved' | 'rejected', _reason?: string): void => {
     console.warn('[AdminContext] updatePostStatus 미구현 — Phase 5 adminApi 이관 대상');
-  };
-  const updatePhotographerVerification = (_photographerId: string, _verified: boolean): void => {
+    showToast('Phase 5 대기 중 — 실제 DB 반영되지 않습니다', 'info');
+  }, [showToast]);
+  const updatePhotographerVerification = useCallback((_photographerId: string, _verified: boolean): void => {
     console.warn('[AdminContext] updatePhotographerVerification 미구현 — Phase 5 adminApi 이관 대상');
-  };
+    showToast('Phase 5 대기 중 — 실제 DB 반영되지 않습니다', 'info');
+  }, [showToast]);
   const { getPendingReports, resolveReport: resolveReportCtx } = useReport();
   const { addNotification } = useNotification();
 
